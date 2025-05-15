@@ -1,3 +1,15 @@
+package com.example.reviewservice.config;
+
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.UUID;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.CommandLineRunner;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.data.mongodb.repository.config.EnableMongoRepositories;
+
 import com.example.reviewservice.model.Review;
 import com.example.reviewservice.repository.ReviewRepository;
 

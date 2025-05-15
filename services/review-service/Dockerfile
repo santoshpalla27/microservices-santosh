@@ -1,25 +1,14 @@
-FROM maven:3.8.7-eclipse-temurin-17-alpine AS build
+
+FROM eclipse-temurin:17-jdk-alpine
 
 WORKDIR /app
 
-# Copy pom.xml first for dependency resolution
 COPY pom.xml .
-RUN mvn dependency:go-offline
+COPY src ./src
 
-# Copy source code
-COPY src ./src/
-
-# Build the application
+RUN apk add --no-cache maven
 RUN mvn package -DskipTests
-
-# Use a smaller JRE image for the final container
-FROM eclipse-temurin:17-jre-alpine
-
-WORKDIR /app
-
-# Copy the built JAR file
-COPY --from=build /app/target/*.jar app.jar
 
 EXPOSE 6000
 
-ENTRYPOINT ["java", "-jar", "app.jar"]
+CMD ["java", "-jar", "target/review-service-0.0.1-SNAPSHOT.jar"]

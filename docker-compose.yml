@@ -43,6 +43,7 @@ services:
   review-service:
     build:
       context: ./services/review-service
+      dockerfile: Dockerfile.simple
     ports:
       - "6000:6000"
     environment:
