@@ -81,6 +81,15 @@ const products = [
   }
 ];
 
+// Seed data function
+const seedProducts = async () => {
+  const count = await Product.countDocuments();
+  if (count === 0) {
+    await Product.insertMany(products);
+    console.log('Database seeded with sample products');
+  }
+};
+
 // Routes
 app.get('/api/products', async (req, res) => {
   try {
