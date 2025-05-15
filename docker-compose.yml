@@ -44,9 +44,9 @@ services:
     volumes:
       - ./services/search-service:/app
 
-  # Go Review Service
+  # nodejs Review Service
   review-service:
-    build: ./services/review-service
+    build: ./services/review-service-js
     ports:
       - "6000:6000"
     environment:
@@ -54,7 +54,8 @@ services:
     depends_on:
       - mongo
     volumes:
-      - ./services/review-service:/app
+      - ./services/review-service-js:/app
+      - /app/node_modules
 
   # MongoDB Database
   mongo:
