@@ -42,7 +42,7 @@ services:
   # Review Service (Node.js)
   review-service:
     build: 
-      context: ./services/review-service-js
+      context: ./services/review-service
     ports:
       - "6000:6000"
     environment:
