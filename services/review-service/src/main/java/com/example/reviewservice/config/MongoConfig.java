@@ -26,7 +26,7 @@ public class MongoConfig {
                 List<Review> reviews = List.of(
                     new Review(
                         UUID.randomUUID().toString(),
-                        "1",  // This would match product IDs from product service
+                        "1",  // Matches product ID from product service
                         "user1",
                         5,
                         "Great smartphone, amazing camera!",
@@ -34,7 +34,7 @@ public class MongoConfig {
                     ),
                     new Review(
                         UUID.randomUUID().toString(),
-                        "1",
+                        "1",  // Multiple reviews for the first product
                         "user2",
                         4,
                         "Good phone but battery life could be better",
@@ -42,7 +42,7 @@ public class MongoConfig {
                     ),
                     new Review(
                         UUID.randomUUID().toString(),
-                        "2",
+                        "2",  // Matches product ID from product service
                         "user1",
                         5,
                         "Excellent laptop for professional work",
@@ -50,10 +50,34 @@ public class MongoConfig {
                     ),
                     new Review(
                         UUID.randomUUID().toString(),
-                        "3",
+                        "3",  // Matches product ID from product service
                         "user3",
                         4,
                         "Great sound quality, comfortable to wear",
+                        LocalDateTime.now()
+                    ),
+                    new Review(
+                        UUID.randomUUID().toString(),
+                        "4",  // Smart Watch
+                        "user4",
+                        5,
+                        "Perfect fitness companion, love the features!",
+                        LocalDateTime.now()
+                    ),
+                    new Review(
+                        UUID.randomUUID().toString(),
+                        "5",  // Bluetooth Speaker
+                        "user2",
+                        4,
+                        "Good sound quality for the size, battery lasts all day",
+                        LocalDateTime.now()
+                    ),
+                    new Review(
+                        UUID.randomUUID().toString(),
+                        "6",  // Tablet Ultra
+                        "user3",
+                        5,
+                        "Great display, perfect for watching movies and browsing",
                         LocalDateTime.now()
                     )
                 );

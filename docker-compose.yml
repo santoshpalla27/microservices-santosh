@@ -12,9 +12,9 @@ services:
       - search-service
       - review-service
     environment:
-      - REACT_APP_PRODUCT_API_URL=http://product-service:4000
-      - REACT_APP_SEARCH_API_URL=http://search-service:5000
-      - REACT_APP_REVIEW_API_URL=http://review-service:6000
+      - REACT_APP_PRODUCT_API_URL=http://localhost:4000
+      - REACT_APP_SEARCH_API_URL=http://localhost:5000
+      - REACT_APP_REVIEW_API_URL=http://localhost:6000
 
   # Node.js Product Service
   product-service:
@@ -43,7 +43,7 @@ services:
   review-service:
     build:
       context: ./services/review-service
-      dockerfile: Dockerfile.simple
+      dockerfile: Dockerfile
     ports:
       - "6000:6000"
     environment:

@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import './App.css';
 import ProductList from './components/ProductList';
 import SearchBar from './components/SearchBar';
+import './App.css';
 
 function App() {
   const [products, setProducts] = useState([]);
@@ -28,8 +28,13 @@ function App() {
       const productsWithReviews = await Promise.all(
         response.data.map(async (product) => {
           try {
+            console.log(`Fetching reviews for product ${product.id} from ${reviewApiUrl}/api/reviews/${product.id}`);
             const reviewsResponse = await axios.get(`${reviewApiUrl}/api/reviews/${product.id}`);
-            return { ...product, reviews: reviewsResponse.data };
+            console.log('Review response:', reviewsResponse.data);
+            return { 
+              ...product, 
+              reviews: Array.isArray(reviewsResponse.data) ? reviewsResponse.data : [] 
+            };
           } catch (err) {
             console.error(`Error fetching reviews for product ${product.id}:`, err);
             return { ...product, reviews: [] };
@@ -37,6 +42,7 @@ function App() {
         })
       );
       
+      console.log('Products with reviews:', productsWithReviews);
       setProducts(productsWithReviews);
       setLoading(false);
     } catch (err) {
