@@ -1,13 +1,25 @@
-FROM node:16-alpine
+FROM maven:3.8.7-eclipse-temurin-17-alpine AS build
 
 WORKDIR /app
 
-COPY package*.json ./
+# Copy pom.xml first for dependency resolution
+COPY pom.xml .
+RUN mvn dependency:go-offline
 
-RUN npm install
+# Copy source code
+COPY src ./src/
 
-COPY . .
+# Build the application
+RUN mvn package -DskipTests
+
+# Use a smaller JRE image for the final container
+FROM eclipse-temurin:17-jre-alpine
+
+WORKDIR /app
+
+# Copy the built JAR file
+COPY --from=build /app/target/*.jar app.jar
 
 EXPOSE 6000
 
-CMD ["node", "index.js"]
+ENTRYPOINT ["java", "-jar", "app.jar"]

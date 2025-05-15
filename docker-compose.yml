@@ -39,14 +39,13 @@ services:
     depends_on:
       - mongo
 
-  # Review Service (Node.js)
+  # Java Review Service
   review-service:
-    build: 
+    build:
       context: ./services/review-service
     ports:
       - "6000:6000"
     environment:
-      - PORT=6000
       - MONGO_URI=mongodb://mongo:27017/products
     depends_on:
       - mongo
