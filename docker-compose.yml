@@ -1,0 +1,68 @@
+version: '3'
+
+services:
+  # Frontend React Application
+  frontend:
+    build: ./frontend
+    ports:
+      - "3000:3000"
+    depends_on:
+      - product-service
+      - search-service
+      - review-service
+    environment:
+      - REACT_APP_PRODUCT_API_URL=http://product-service:4000
+      - REACT_APP_SEARCH_API_URL=http://search-service:5000
+      - REACT_APP_REVIEW_API_URL=http://review-service:6000
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+
+  # Node.js Product Service
+  product-service:
+    build: ./services/product-service
+    ports:
+      - "4000:4000"
+    environment:
+      - PORT=4000
+      - MONGO_URI=mongodb://mongo:27017/products
+    depends_on:
+      - mongo
+    volumes:
+      - ./services/product-service:/app
+      - /app/node_modules
+
+  # Python Search Service
+  search-service:
+    build: ./services/search-service
+    ports:
+      - "5000:5000"
+    environment:
+      - MONGO_URI=mongodb://mongo:27017/products
+    depends_on:
+      - mongo
+    volumes:
+      - ./services/search-service:/app
+
+  # Go Review Service
+  review-service:
+    build: ./services/review-service
+    ports:
+      - "6000:6000"
+    environment:
+      - MONGO_URI=mongodb://mongo:27017/products
+    depends_on:
+      - mongo
+    volumes:
+      - ./services/review-service:/app
+
+  # MongoDB Database
+  mongo:
+    image: mongo:latest
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+
+volumes:
+  mongo-data:
