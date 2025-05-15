@@ -5,26 +5,20 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.CommandLineRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.data.mongodb.config.AbstractMongoClientConfiguration;
 import org.springframework.data.mongodb.repository.config.EnableMongoRepositories;
+import org.springframework.boot.CommandLineRunner;
 
 import com.example.reviewservice.model.Review;
 import com.example.reviewservice.repository.ReviewRepository;
-import com.mongodb.ConnectionString;
-import com.mongodb.MongoClientSettings;
 import com.mongodb.client.MongoClient;
 import com.mongodb.client.MongoClients;
 
 @Configuration
 @EnableMongoRepositories(basePackages = "com.example.reviewservice.repository")
 public class MongoConfig extends AbstractMongoClientConfiguration {
-
-    @Value("${spring.data.mongodb.uri}")
-    private String mongoUri;
     
     @Override
     protected String getDatabaseName() {
@@ -33,12 +27,10 @@ public class MongoConfig extends AbstractMongoClientConfiguration {
     
     @Override
     public MongoClient mongoClient() {
+        // Hardcoded URI to resolve issue with environment variables
+        String mongoUri = "mongodb://mongo:27017/products";
         System.out.println("Connecting to MongoDB with URI: " + mongoUri);
-        ConnectionString connectionString = new ConnectionString(mongoUri);
-        MongoClientSettings mongoClientSettings = MongoClientSettings.builder()
-                .applyConnectionString(connectionString)
-                .build();
-        return MongoClients.create(mongoClientSettings);
+        return MongoClients.create(mongoUri);
     }
 
     @Bean

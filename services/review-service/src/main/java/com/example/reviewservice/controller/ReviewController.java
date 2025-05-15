@@ -5,7 +5,6 @@ import java.util.List;
 import java.util.Map;
 
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -22,9 +21,6 @@ public class ReviewController {
     @Autowired
     private ReviewRepository reviewRepository;
     
-    @Value("${spring.data.mongodb.uri}")
-    private String mongoUri;
-    
     @GetMapping("/")
     public ResponseEntity<String> home() {
         return ResponseEntity.ok("Review Service is running");
@@ -34,7 +30,7 @@ public class ReviewController {
     public ResponseEntity<Map<String, Object>> healthCheck() {
         Map<String, Object> response = new HashMap<>();
         response.put("status", "healthy");
-        response.put("mongoUri", mongoUri.replaceAll("mongodb://([^:]+):[^@]+@", "mongodb://$1:****@"));
+        response.put("mongoUri", "mongodb://mongo:27017/products");
         
         try {
             // Count reviews per product for debugging
