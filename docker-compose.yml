@@ -3,7 +3,8 @@ version: '3'
 services:
   # Frontend React Application
   frontend:
-    build: ./frontend
+    build:
+      context: ./frontend
     ports:
       - "3000:3000"
     depends_on:
@@ -14,13 +15,11 @@ services:
       - REACT_APP_PRODUCT_API_URL=http://product-service:4000
       - REACT_APP_SEARCH_API_URL=http://search-service:5000
       - REACT_APP_REVIEW_API_URL=http://review-service:6000
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
 
   # Node.js Product Service
   product-service:
-    build: ./services/product-service
+    build:
+      context: ./services/product-service
     ports:
       - "4000:4000"
     environment:
@@ -28,34 +27,29 @@ services:
       - MONGO_URI=mongodb://mongo:27017/products
     depends_on:
       - mongo
-    volumes:
-      - ./services/product-service:/app
-      - /app/node_modules
 
   # Python Search Service
   search-service:
-    build: ./services/search-service
+    build:
+      context: ./services/search-service
     ports:
       - "5000:5000"
     environment:
       - MONGO_URI=mongodb://mongo:27017/products
     depends_on:
       - mongo
-    volumes:
-      - ./services/search-service:/app
 
-  # nodejs Review Service
+  # Review Service (Node.js)
   review-service:
-    build: ./services/review-service-js
+    build: 
+      context: ./services/review-service-js
     ports:
       - "6000:6000"
     environment:
+      - PORT=6000
       - MONGO_URI=mongodb://mongo:27017/products
     depends_on:
       - mongo
-    volumes:
-      - ./services/review-service-js:/app
-      - /app/node_modules
 
   # MongoDB Database
   mongo:
