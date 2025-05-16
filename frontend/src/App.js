@@ -1,6 +1,5 @@
 import React from 'react';
 import { Routes, Route } from 'react-router-dom';
-import { ArrowRight, Database, Server, Globe, HardDrive } from 'lucide-react';
 
 // Components
 import Navigation from './components/Navigation';
@@ -25,7 +24,7 @@ const Home = () => (
           <div className="grid grid-cols-1 md:grid-cols-4 gap-2 w-full max-w-4xl">
             {/* Frontend */}
             <div className="bg-blue-100 p-4 rounded-lg flex flex-col items-center justify-center shadow-md">
-              <Globe className="h-12 w-12 text-blue-600 mb-2" />
+              <div className="text-blue-600 text-4xl mb-2">🌐</div>
               <div className="text-center">
                 <h3 className="font-bold">Frontend</h3>
                 <p className="text-sm">React</p>
@@ -34,12 +33,12 @@ const Home = () => (
             
             {/* Arrow */}
             <div className="hidden md:flex items-center justify-center">
-              <ArrowRight className="h-8 w-8 text-gray-500" />
+              <div className="text-gray-500 text-4xl">→</div>
             </div>
             
             {/* Backend */}
             <div className="bg-green-100 p-4 rounded-lg flex flex-col items-center justify-center shadow-md">
-              <Server className="h-12 w-12 text-green-600 mb-2" />
+              <div className="text-green-600 text-4xl mb-2">🖥️</div>
               <div className="text-center">
                 <h3 className="font-bold">Backend</h3>
                 <p className="text-sm">Node.js/Express</p>
@@ -50,7 +49,7 @@ const Home = () => (
             <div className="flex flex-col gap-4">
               {/* PostgreSQL */}
               <div className="bg-purple-100 p-4 rounded-lg flex flex-col items-center justify-center shadow-md">
-                <Database className="h-12 w-12 text-purple-600 mb-2" />
+                <div className="text-purple-600 text-4xl mb-2">💾</div>
                 <div className="text-center">
                   <h3 className="font-bold">PostgreSQL</h3>
                   <p className="text-sm">Persistent Storage</p>
@@ -59,7 +58,7 @@ const Home = () => (
               
               {/* Redis */}
               <div className="bg-red-100 p-4 rounded-lg flex flex-col items-center justify-center shadow-md">
-                <HardDrive className="h-12 w-12 text-red-600 mb-2" />
+                <div className="text-red-600 text-4xl mb-2">📊</div>
                 <div className="text-center">
                   <h3 className="font-bold">Redis</h3>
                   <p className="text-sm">In-memory Storage</p>

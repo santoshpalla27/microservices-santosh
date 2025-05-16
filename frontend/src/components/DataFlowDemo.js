@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { ArrowRight, Database, Server, Globe, HardDrive, CheckCircle, XCircle } from 'lucide-react';
 
 const Demo = () => {
   const [activeStep, setActiveStep] = useState(0);
@@ -110,7 +109,7 @@ const Demo = () => {
               <div className={`flex flex-col items-center ${idx <= activeStep ? 'text-blue-600' : 'text-gray-400'}`}>
                 <div className={`w-8 h-8 flex items-center justify-center rounded-full border-2 ${idx <= activeStep ? 'border-blue-600 bg-blue-100' : 'border-gray-300'}`}>
                   {idx < activeStep ? (
-                    <CheckCircle className="w-6 h-6 text-blue-600" />
+                    <div className="w-6 h-6 text-blue-600">✓</div>
                   ) : (
                     <span>{idx + 1}</span>
                   )}
@@ -173,7 +172,7 @@ const Demo = () => {
                   className="mr-2"
                 />
                 <div className="flex items-center">
-                  <Database className="h-5 w-5 text-purple-600 mr-2" />
+                  <div className="text-purple-600 text-xl mr-2">💾</div>
                   <span>PostgreSQL (Persistent Storage)</span>
                 </div>
               </label>
@@ -187,7 +186,7 @@ const Demo = () => {
                   className="mr-2"
                 />
                 <div className="flex items-center">
-                  <HardDrive className="h-5 w-5 text-red-600 mr-2" />
+                  <div className="text-red-600 text-xl mr-2">📊</div>
                   <span>Redis (In-memory Cache)</span>
                 </div>
               </label>
@@ -200,16 +199,16 @@ const Demo = () => {
             <h3 className="font-semibold text-lg">Data Transmission</h3>
             <div className="flex flex-col md:flex-row items-center justify-center py-6">
               <div className="flex flex-col items-center mb-4 md:mb-0">
-                <Globe className="h-12 w-12 text-blue-600" />
+                <div className="text-blue-600 text-4xl">🌐</div>
                 <span className="text-sm mt-1">Frontend</span>
               </div>
               
               <div className="w-16 flex justify-center items-center animate-pulse">
-                <ArrowRight className="h-8 w-8 text-gray-600" />
+                <div className="text-3xl text-gray-600">→</div>
               </div>
               
               <div className="flex flex-col items-center">
-                <Server className="h-12 w-12 text-green-600" />
+                <div className="text-green-600 text-4xl">🖥️</div>
                 <span className="text-sm mt-1">Backend</span>
               </div>
             </div>
@@ -252,7 +251,7 @@ const Demo = () => {
             <h3 className="font-semibold text-lg">Data Storage</h3>
             {storage === 'postgres' ? (
               <div className="flex flex-col items-center">
-                <Database className="h-16 w-16 text-purple-600 mb-2" />
+                <div className="text-purple-600 text-4xl mb-2">💾</div>
                 <p className="text-center mb-2">PostgreSQL Database</p>
                 <div className="w-full bg-white p-3 rounded border border-gray-300 overflow-auto">
                   <table className="min-w-full divide-y divide-gray-200">
@@ -285,7 +284,7 @@ const Demo = () => {
               </div>
             ) : (
               <div className="flex flex-col items-center">
-                <HardDrive className="h-16 w-16 text-red-600 mb-2" />
+                <div className="text-red-600 text-4xl mb-2">📊</div>
                 <p className="text-center mb-2">Redis Cache</p>
                 <div className="w-full bg-white p-3 rounded border border-gray-300">
                   <table className="min-w-full divide-y divide-gray-200">
@@ -319,7 +318,7 @@ const Demo = () => {
             <h3 className="font-semibold text-lg">Operation Complete</h3>
             <div className="flex justify-center p-4">
               <div className="bg-green-100 text-green-800 p-4 rounded-lg flex items-center">
-                <CheckCircle className="h-8 w-8 mr-3" />
+                <div className="text-green-800 text-2xl mr-3">✓</div>
                 <div>
                   <p className="font-semibold">Success!</p>
                   <p>{statusMessage}</p>
