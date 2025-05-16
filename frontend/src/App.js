@@ -1,114 +1,91 @@
-import React, { useState, useEffect } from 'react';
-import axios from 'axios';
-import ProductList from './components/ProductList';
-import SearchBar from './components/SearchBar';
-import './App.css';
+import React from 'react';
+import { Routes, Route } from 'react-router-dom';
+import { ArrowRight, Database, Server, Globe, HardDrive } from 'lucide-react';
+
+// Components
+import Navigation from './components/Navigation';
+import DataForm from './components/DataForm';
+import PostgresData from './components/PostgresData';
+import RedisData from './components/RedisData';
+
+// Home page component with architecture diagram
+const Home = () => (
+  <div>
+    <div className="bg-white shadow-md rounded px-8 pt-6 pb-8 mb-4">
+      <h2 className="text-xl font-semibold mb-4">Data Flow Application</h2>
+      <p className="mb-4">
+        This application demonstrates connectivity between a React frontend, Node.js/Express backend, 
+        PostgreSQL database, and Redis cluster.
+      </p>
+      
+      <div className="w-full bg-gray-100 p-6 rounded-lg shadow-md mb-4">
+        <h3 className="text-lg font-semibold text-center mb-6">Application Architecture</h3>
+        
+        <div className="flex flex-col items-center justify-center">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-2 w-full max-w-4xl">
+            {/* Frontend */}
+            <div className="bg-blue-100 p-4 rounded-lg flex flex-col items-center justify-center shadow-md">
+              <Globe className="h-12 w-12 text-blue-600 mb-2" />
+              <div className="text-center">
+                <h3 className="font-bold">Frontend</h3>
+                <p className="text-sm">React</p>
+              </div>
+            </div>
+            
+            {/* Arrow */}
+            <div className="hidden md:flex items-center justify-center">
+              <ArrowRight className="h-8 w-8 text-gray-500" />
+            </div>
+            
+            {/* Backend */}
+            <div className="bg-green-100 p-4 rounded-lg flex flex-col items-center justify-center shadow-md">
+              <Server className="h-12 w-12 text-green-600 mb-2" />
+              <div className="text-center">
+                <h3 className="font-bold">Backend</h3>
+                <p className="text-sm">Node.js/Express</p>
+              </div>
+            </div>
+            
+            {/* Storage */}
+            <div className="flex flex-col gap-4">
+              {/* PostgreSQL */}
+              <div className="bg-purple-100 p-4 rounded-lg flex flex-col items-center justify-center shadow-md">
+                <Database className="h-12 w-12 text-purple-600 mb-2" />
+                <div className="text-center">
+                  <h3 className="font-bold">PostgreSQL</h3>
+                  <p className="text-sm">Persistent Storage</p>
+                </div>
+              </div>
+              
+              {/* Redis */}
+              <div className="bg-red-100 p-4 rounded-lg flex flex-col items-center justify-center shadow-md">
+                <HardDrive className="h-12 w-12 text-red-600 mb-2" />
+                <div className="text-center">
+                  <h3 className="font-bold">Redis</h3>
+                  <p className="text-sm">In-memory Storage</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <DataForm />
+  </div>
+);
 
 function App() {
-  const [products, setProducts] = useState([]);
-  const [searchResults, setSearchResults] = useState([]);
-  const [isSearching, setIsSearching] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-
-  const productApiUrl = process.env.REACT_APP_PRODUCT_API_URL || 'http://localhost:4000';
-  const searchApiUrl = process.env.REACT_APP_SEARCH_API_URL || 'http://localhost:5000';
-  const reviewApiUrl = process.env.REACT_APP_REVIEW_API_URL || 'http://localhost:6000';
-
-  useEffect(() => {
-    fetchProducts();
-  }, []);
-
-  const fetchProducts = async () => {
-    try {
-      setLoading(true);
-      const response = await axios.get(`${productApiUrl}/api/products`);
-      
-      // Fetch reviews for each product
-      const productsWithReviews = await Promise.all(
-        response.data.map(async (product) => {
-          try {
-            console.log(`Fetching reviews for product ${product.id} from ${reviewApiUrl}/api/reviews/${product.id}`);
-            const reviewsResponse = await axios.get(`${reviewApiUrl}/api/reviews/${product.id}`);
-            console.log('Review response:', reviewsResponse.data);
-            return { 
-              ...product, 
-              reviews: Array.isArray(reviewsResponse.data) ? reviewsResponse.data : [] 
-            };
-          } catch (err) {
-            console.error(`Error fetching reviews for product ${product.id}:`, err);
-            return { ...product, reviews: [] };
-          }
-        })
-      );
-      
-      console.log('Products with reviews:', productsWithReviews);
-      setProducts(productsWithReviews);
-      setLoading(false);
-    } catch (err) {
-      setError('Failed to fetch products. Please try again later.');
-      setLoading(false);
-      console.error('Error fetching products:', err);
-    }
-  };
-
-  const handleSearch = async (searchTerm) => {
-    if (!searchTerm.trim()) {
-      setIsSearching(false);
-      return;
-    }
-
-    try {
-      setLoading(true);
-      setIsSearching(true);
-      const response = await axios.get(`${searchApiUrl}/api/search?q=${encodeURIComponent(searchTerm)}`);
-      
-      // Fetch reviews for each search result
-      const resultsWithReviews = await Promise.all(
-        response.data.map(async (product) => {
-          try {
-            const reviewsResponse = await axios.get(`${reviewApiUrl}/api/reviews/${product.id}`);
-            return { ...product, reviews: reviewsResponse.data };
-          } catch (err) {
-            console.error(`Error fetching reviews for product ${product.id}:`, err);
-            return { ...product, reviews: [] };
-          }
-        })
-      );
-      
-      setSearchResults(resultsWithReviews);
-      setLoading(false);
-    } catch (err) {
-      setError('Failed to search products. Please try again later.');
-      setLoading(false);
-      console.error('Error searching products:', err);
-    }
-  };
-
-  const clearSearch = () => {
-    setIsSearching(false);
-    setSearchResults([]);
-  };
-
   return (
-    <div className="App">
-      <header className="header">
-        <div className="container header-content">
-          <h1>ProductMicro</h1>
-        </div>
-      </header>
-      
-      <main className="container">
-        <SearchBar onSearch={handleSearch} onClear={clearSearch} />
-        
-        {loading ? (
-          <div className="loading">Loading products...</div>
-        ) : error ? (
-          <div className="error">{error}</div>
-        ) : (
-          <ProductList products={isSearching ? searchResults : products} />
-        )}
-      </main>
+    <div className="min-h-screen">
+      <Navigation />
+      <div className="container mx-auto p-4">
+        <Routes>
+          <Route path="/" element={<Home />} />
+          <Route path="/postgres" element={<PostgresData />} />
+          <Route path="/redis" element={<RedisData />} />
+        </Routes>
+      </div>
     </div>
   );
 }

@@ -1,63 +1,76 @@
-version: '3'
+version: '3.8'
 
 services:
-  # Frontend React Application
   frontend:
-    build:
-      context: ./frontend
+    build: ./frontend
     ports:
       - "3000:3000"
     depends_on:
-      - product-service
-      - search-service
-      - review-service
+      - backend
     environment:
-      - REACT_APP_PRODUCT_API_URL=http://52.90.27.183:4000
-      - REACT_APP_SEARCH_API_URL=http://52.90.27.183:5000
-      - REACT_APP_REVIEW_API_URL=http://52.90.27.183:8080
+      - REACT_APP_API_URL=http://localhost:5000
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
 
-  # Node.js Product Service
-  product-service:
-    build:
-      context: ./services/product-service
-    ports:
-      - "4000:4000"
-    environment:
-      - PORT=4000
-      - MONGO_URI=mongodb://mongo:27017/products
-    depends_on:
-      - mongo
-
-  # Python Search Service
-  search-service:
-    build:
-      context: ./services/search-service
+  backend:
+    build: ./backend
     ports:
       - "5000:5000"
-    environment:
-      - MONGO_URI=mongodb://mongo:27017/products
     depends_on:
-      - mongo
-
-  # Java Review Service
-  review-service:
-    build:
-      context: ./services/review-service
-      dockerfile: Dockerfile
-    ports:
-      - "8080:8080"
+      - postgres
+      - redis-master
     environment:
-      - MONGO_URI=mongodb://mongo:27017/products
-    depends_on:
-      - mongo
-
-  # MongoDB Database
-  mongo:
-    image: mongo:latest
-    ports:
-      - "27017:27017"
+      - NODE_ENV=development
+      - PORT=5000
+      - POSTGRES_HOST=postgres
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=dataflowdb
+      - REDIS_HOST=redis-master
+      - REDIS_PORT=6379
     volumes:
-      - mongo-data:/data/db
+      - ./backend:/app
+      - /app/node_modules
 
+  postgres:
+    image: postgres:14-alpine
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=dataflowdb
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql
+
+  redis-master:
+    image: redis:6-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-master-data:/data
+    command: redis-server --appendonly yes
+
+  redis-replica-1:
+    image: redis:6-alpine
+    depends_on:
+      - redis-master
+    command: redis-server --slaveof redis-master 6379 --appendonly yes
+    volumes:
+      - redis-replica-1-data:/data
+
+  redis-replica-2:
+    image: redis:6-alpine
+    depends_on:
+      - redis-master
+    command: redis-server --slaveof redis-master 6379 --appendonly yes
+    volumes:
+      - redis-replica-2-data:/data
+      
 volumes:
-  mongo-data:
+  postgres-data:
+  redis-master-data:
+  redis-replica-1-data:
+  redis-replica-2-data:
