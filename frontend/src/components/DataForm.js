@@ -51,16 +51,13 @@ const DataForm = () => {
   };
 
   return (
-    <div className="bg-white shadow-md rounded px-8 pt-6 pb-8 mb-4">
-      <h2 className="text-xl font-semibold mb-4">Add New Data</h2>
+    <div className="card">
+      <h2 className="card-title">Add New Data</h2>
       
       <form onSubmit={handleSubmit}>
-        <div className="mb-4">
-          <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="key">
-            Key
-          </label>
+        <div className="form-group">
+          <label htmlFor="key">Key</label>
           <input
-            className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
             id="key"
             type="text"
             placeholder="Enter key"
@@ -69,59 +66,52 @@ const DataForm = () => {
           />
         </div>
         
-        <div className="mb-4">
-          <label className="block text-gray-700 text-sm font-bold mb-2" htmlFor="value">
-            Value
-          </label>
+        <div className="form-group">
+          <label htmlFor="value">Value</label>
           <textarea
-            className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
             id="value"
             placeholder="Enter value"
             value={value}
             onChange={(e) => setValue(e.target.value)}
             rows="3"
-          />
+          ></textarea>
         </div>
         
-        <div className="mb-6">
-          <label className="block text-gray-700 text-sm font-bold mb-2">
-            Storage Type
-          </label>
-          <div className="flex items-center space-x-4">
-            <label className="inline-flex items-center">
+        <div className="form-group">
+          <label>Storage Type</label>
+          <div className="radio-group">
+            <label className="radio-option">
               <input
                 type="radio"
-                className="form-radio"
                 name="storage"
                 value="postgres"
                 checked={storage === 'postgres'}
                 onChange={() => setStorage('postgres')}
               />
-              <span className="ml-2">PostgreSQL</span>
+              <span>PostgreSQL</span>
             </label>
-            <label className="inline-flex items-center">
+            <label className="radio-option">
               <input
                 type="radio"
-                className="form-radio"
                 name="storage"
                 value="redis"
                 checked={storage === 'redis'}
                 onChange={() => setStorage('redis')}
               />
-              <span className="ml-2">Redis</span>
+              <span>Redis</span>
             </label>
           </div>
         </div>
         
         {status.message && (
-          <div className={`p-3 mb-4 rounded ${status.isError ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
+          <div className={`alert ${status.isError ? 'alert-error' : 'alert-success'}`}>
             {status.message}
           </div>
         )}
         
-        <div className="flex items-center justify-between">
+        <div className="flex justify-between">
           <button
-            className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline"
+            className={`btn ${isLoading ? 'btn-disabled' : 'btn-primary'}`}
             type="submit"
             disabled={isLoading}
           >

@@ -26,12 +26,12 @@ const PostgresData = () => {
   }, []);
 
   return (
-    <div className="bg-white shadow-md rounded px-8 pt-6 pb-8 mb-4">
+    <div className="card">
       <div className="flex justify-between items-center mb-4">
-        <h2 className="text-xl font-semibold">PostgreSQL Data</h2>
+        <h2 className="card-title">PostgreSQL Data</h2>
         <button 
           onClick={fetchData}
-          className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-1 px-3 rounded focus:outline-none focus:shadow-outline"
+          className={`btn ${isLoading ? 'btn-disabled' : 'btn-primary'}`}
           disabled={isLoading}
         >
           {isLoading ? 'Refreshing...' : 'Refresh'}
@@ -39,33 +39,33 @@ const PostgresData = () => {
       </div>
       
       {error && (
-        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4" role="alert">
+        <div className="alert alert-error">
           <p>{error}</p>
         </div>
       )}
       
       {isLoading ? (
-        <div className="text-center py-4">Loading data...</div>
+        <div className="text-center p-4">Loading data...</div>
       ) : data.length === 0 ? (
-        <div className="text-center py-4 text-gray-500">No data found in PostgreSQL</div>
+        <div className="text-center p-4">No data found in PostgreSQL</div>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="min-w-full bg-white">
-            <thead className="bg-gray-100">
+        <div>
+          <table>
+            <thead>
               <tr>
-                <th className="py-2 px-4 border-b text-left">ID</th>
-                <th className="py-2 px-4 border-b text-left">Key</th>
-                <th className="py-2 px-4 border-b text-left">Value</th>
-                <th className="py-2 px-4 border-b text-left">Created At</th>
+                <th>ID</th>
+                <th>Key</th>
+                <th>Value</th>
+                <th>Created At</th>
               </tr>
             </thead>
             <tbody>
               {data.map((item) => (
-                <tr key={item.id} className="hover:bg-gray-50">
-                  <td className="py-2 px-4 border-b">{item.id}</td>
-                  <td className="py-2 px-4 border-b">{item.key}</td>
-                  <td className="py-2 px-4 border-b">{item.value}</td>
-                  <td className="py-2 px-4 border-b">
+                <tr key={item.id}>
+                  <td>{item.id}</td>
+                  <td>{item.key}</td>
+                  <td>{item.value}</td>
+                  <td>
                     {new Date(item.created_at).toLocaleString()}
                   </td>
                 </tr>
