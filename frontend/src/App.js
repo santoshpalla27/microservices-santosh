@@ -6,15 +6,18 @@ import Navigation from './components/Navigation-alt';
 import DataForm from './components/DataForm-alt';
 import PostgresData from './components/PostgresData-alt';
 import RedisData from './components/RedisData-alt';
+import DatabaseStatus from './components/DatabaseStatus';
 
 // Home page component with architecture diagram
 const Home = () => (
   <div>
+    <DatabaseStatus />
+    
     <div className="card mb-4">
       <h2 className="card-title">Data Flow Application</h2>
       <p className="mb-4">
         This application demonstrates connectivity between a React frontend, Node.js/Express backend, 
-        PostgreSQL database, and Redis in-memory store.
+        PostgreSQL database, and Redis Cluster for in-memory storage.
       </p>
       
       <div className="p-4 mb-4" style={{backgroundColor: '#f8f9fa', borderRadius: '8px'}}>
@@ -52,7 +55,7 @@ const Home = () => (
           <div className="p-3 text-center" style={{backgroundColor: '#ffe6e6', borderRadius: '8px', margin: '8px'}}>
             <div className="text-center mb-2" style={{fontSize: '2rem'}}>📊</div>
             <div>
-              <h3 className="font-bold">Redis</h3>
+              <h3 className="font-bold">Redis Cluster</h3>
               <p className="text-sm">In-memory Storage</p>
             </div>
           </div>
