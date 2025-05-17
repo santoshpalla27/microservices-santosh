@@ -29,7 +29,12 @@
         padding: 1rem 0;
         margin-bottom: 2rem;
       }
-      .task-form, .task-list {
+      .header-container {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .task-form, .task-list, .login-form {
         background-color: white;
         border-radius: 8px;
         padding: 1.5rem;
@@ -57,9 +62,23 @@
         padding: 0.6rem 1.2rem;
         border-radius: 4px;
         cursor: pointer;
+        margin-right: 0.5rem;
       }
       button:hover {
         background-color: #2980b9;
+      }
+      .logout-button {
+        background-color: #e74c3c;
+      }
+      .logout-button:hover {
+        background-color: #c0392b;
+      }
+      .demo-button {
+        background-color: #27ae60;
+        margin-left: 0.5rem;
+      }
+      .demo-button:hover {
+        background-color: #2ecc71;
       }
       ul {
         list-style: none;
@@ -87,6 +106,19 @@
       .due-date {
         font-size: 0.8rem;
         color: #777;
+      }
+      .error-message {
+        background-color: #f8d7da;
+        color: #721c24;
+        padding: 0.75rem 1.25rem;
+        margin-bottom: 1rem;
+        border: 1px solid #f5c6cb;
+        border-radius: 0.25rem;
+      }
+      .login-hint {
+        margin-top: 1rem;
+        font-size: 0.9rem;
+        color: #6c757d;
       }
     </style>
   </head>

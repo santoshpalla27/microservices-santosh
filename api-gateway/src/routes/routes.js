@@ -19,40 +19,30 @@ router.use('/auth', createProxyMiddleware({
   }
 }));
 
-// Route for task service (auth required)
-router.use('/tasks', verifyToken, createProxyMiddleware({
+// DEVELOPMENT MODE: Bypass authentication for demo purposes
+// In a production app, you would use the commented-out version with authentication
+// router.use('/tasks', verifyToken, createProxyMiddleware({...
+
+// Route for task service (auth bypassed for demo)
+router.use('/tasks', createProxyMiddleware({
   target: TASK_SERVICE_URL,
   changeOrigin: true,
   pathRewrite: {
     '^/tasks': '/tasks'
-  },
-  onProxyReq: (proxyReq, req) => {
-    // Add user ID to query parameters
-    const url = new URL(proxyReq.path, `http://${proxyReq.getHeader('host')}`);
-    url.searchParams.set('userId', req.userId);
-    proxyReq.path = `${url.pathname}${url.search}`;
   }
 }));
 
-// Route for notification service (auth required)
-router.use('/notifications', verifyToken, createProxyMiddleware({
+// Route for notification service (auth bypassed for demo)
+router.use('/notifications', createProxyMiddleware({
   target: NOTIFICATION_SERVICE_URL,
   changeOrigin: true,
   pathRewrite: {
     '^/notifications': '/notifications'
-  },
-  onProxyReq: (proxyReq, req) => {
-    // Add user ID to query parameters if not present
-    if (!req.query.userId) {
-      const url = new URL(proxyReq.path, `http://${proxyReq.getHeader('host')}`);
-      url.searchParams.set('userId', req.userId);
-      proxyReq.path = `${url.pathname}${url.search}`;
-    }
   }
 }));
 
-// Route for analytics service (auth required)
-router.use('/analytics', verifyToken, createProxyMiddleware({
+// Route for analytics service (auth bypassed for demo)
+router.use('/analytics', createProxyMiddleware({
   target: ANALYTICS_SERVICE_URL,
   changeOrigin: true,
   pathRewrite: {
