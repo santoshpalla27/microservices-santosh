@@ -18,16 +18,13 @@ const initializeApp = async () => {
   try {
     // Database connection setup
     const db = require('./config/db.config');
+    // Load Redis module but don't wait for connection
     const redis = require('./config/redis.config');
     
     // Simple route for testing
     app.get('/', (req, res) => {
       res.json({ message: 'Welcome to User Record Application' });
     });
-    
-    // Preload Redis connection to be ready when first API call comes in
-    console.log('Initializing Redis connection...');
-    await redis.getRedisClient();
     
     // Routes
     require('./routes/user.routes')(app);
@@ -37,11 +34,22 @@ const initializeApp = async () => {
     app.listen(PORT, () => {
       console.log(`Server is running on port ${PORT}.`);
     });
+    
+    // Preload Redis connection to be ready when first API call comes in
+    console.log('Initializing Redis connection in background...');
+    redis.getRedisClient().catch(err => {
+      console.error('Initial Redis connection failed, will retry on demand:', err.message);
+    });
   } catch (err) {
     console.error('Failed to initialize application:', err);
-    process.exit(1);
+    // Don't exit process, continue running even if some components fail
+    console.log('Server will continue running with limited functionality');
   }
 };
+
+// Start the application with proper initialization
+initializeApp();
+
 
 // Start the application with proper initialization
 initializeApp();

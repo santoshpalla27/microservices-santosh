@@ -6,18 +6,22 @@ const RedisUsers = ({ refreshTrigger, onDelete }) => {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [retryCount, setRetryCount] = useState(0);
   
   // Fetch users from Redis
   const fetchUsers = async () => {
     try {
       setLoading(true);
+      setError(null);
       const data = await api.getRedisUsers();
       setUsers(data);
-      setError(null);
     } catch (err) {
       console.error('Error fetching Redis users:', err);
-      setError('Failed to fetch users from Redis cluster');
-      toast.error('Failed to load Redis users');
+      setError(err.response?.data || { 
+        message: 'Failed to fetch users from Redis cluster',
+        suggestion: 'The Redis Cluster may still be initializing. Please wait a moment and try again.'
+      });
+      toast.error('Failed to load Redis users. The cluster may still be initializing.');
     } finally {
       setLoading(false);
     }
@@ -47,11 +51,16 @@ const RedisUsers = ({ refreshTrigger, onDelete }) => {
   // Fetch users on component mount and when refreshTrigger changes
   useEffect(() => {
     fetchUsers();
-  }, [refreshTrigger]);
+  }, [refreshTrigger, retryCount]);
   
   // Refresh button handler
   const handleRefresh = () => {
     fetchUsers();
+  };
+  
+  // Retry button handler
+  const handleRetry = () => {
+    setRetryCount(prevCount => prevCount + 1);
   };
   
   if (loading) {
@@ -60,9 +69,16 @@ const RedisUsers = ({ refreshTrigger, onDelete }) => {
   
   if (error) {
     return (
-      <div>
-        <p>{error}</p>
-        <button className="refresh-btn" onClick={handleRefresh}>Retry</button>
+      <div className="error-container">
+        <h3>Error Loading Redis Users</h3>
+        <p>{error.message}</p>
+        {error.suggestion && <p><strong>Suggestion:</strong> {error.suggestion}</p>}
+        <div className="button-group">
+          <button className="refresh-btn" onClick={handleRetry}>Retry</button>
+          <button className="tab-btn" onClick={() => document.querySelector('.tab-btn').click()}>
+            Switch to MySQL View
+          </button>
+        </div>
       </div>
     );
   }

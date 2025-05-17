@@ -1,4 +1,26 @@
-/* App.css */
+/* Error container */
+.error-container {
+  background-color: #fff3f3;
+  border: 1px solid #ffcaca;
+  border-radius: 8px;
+  padding: 20px;
+  margin-bottom: 20px;
+}
+
+.error-container h3 {
+  color: #e74c3c;
+  margin-top: 0;
+}
+
+.error-container p {
+  margin: 10px 0;
+}
+
+.button-group {
+  display: flex;
+  gap: 10px;
+  margin-top: 15px;
+}/* App.css */
 .app-container {
   max-width: 1200px;
   margin: 0 auto;

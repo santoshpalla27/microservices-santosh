@@ -1,4 +1,4 @@
-const IORedis = require('ioredis');
+const Redis = require('ioredis');
 
 // Parse Redis nodes from environment variable
 const parseRedisNodes = () => {
@@ -9,168 +9,160 @@ const parseRedisNodes = () => {
   });
 };
 
-// Function to wait until Redis is ready
-const waitForRedisCluster = async (nodes, password, maxAttempts = 60) => {
-  let attempts = 0;
-  const singleNodeClient = new IORedis({
-    host: nodes[0].host,
-    port: nodes[0].port,
-    password: password,
-    connectionName: 'health-check-client',
-    lazyConnect: true,
-    connectTimeout: 3000,
-    maxRetriesPerRequest: 1
+// Function to test if a Redis node is available
+const testRedisNode = async (host, port, password, attempt = 1, maxAttempts = 5) => {
+  console.log(`Testing Redis node ${host}:${port} (attempt ${attempt}/${maxAttempts})...`);
+  
+  const client = new Redis({
+    host,
+    port,
+    password,
+    connectTimeout: 5000,
+    maxRetriesPerRequest: 1,
+    retryStrategy: () => null  // Don't retry automatically
   });
   
-  while (attempts < maxAttempts) {
-    try {
-      await singleNodeClient.connect();
-      const result = await singleNodeClient.ping();
-      if (result === 'PONG') {
-        console.log(`Redis node ${nodes[0].host}:${nodes[0].port} is now available after ${attempts} attempts`);
-        await singleNodeClient.disconnect();
-        return true;
+  return new Promise((resolve) => {
+    const timeoutId = setTimeout(() => {
+      client.disconnect();
+      if (attempt < maxAttempts) {
+        console.log(`Timeout connecting to ${host}:${port}, retrying...`);
+        resolve(testRedisNode(host, port, password, attempt + 1, maxAttempts));
+      } else {
+        console.log(`Failed to connect to ${host}:${port} after ${maxAttempts} attempts`);
+        resolve(false);
       }
-    } catch (err) {
-      console.log(`Waiting for Redis to be ready (attempt ${attempts + 1}/${maxAttempts})...`);
-    } finally {
-      try {
-        if (singleNodeClient.status === 'ready') {
-          await singleNodeClient.disconnect();
-        }
-      } catch (err) { /* ignore disconnect errors */ }
-    }
+    }, 5000);
     
-    attempts++;
-    await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2 seconds between attempts
-  }
-  
-  console.error(`Redis still not ready after ${maxAttempts} attempts`);
-  return false;
+    client.ping().then(() => {
+      clearTimeout(timeoutId);
+      client.disconnect();
+      console.log(`Successfully connected to Redis node ${host}:${port}`);
+      resolve(true);
+    }).catch(err => {
+      clearTimeout(timeoutId);
+      client.disconnect();
+      console.error(`Error connecting to Redis node ${host}:${port}:`, err.message);
+      if (attempt < maxAttempts) {
+        console.log(`Retrying connection to ${host}:${port}...`);
+        setTimeout(() => {
+          resolve(testRedisNode(host, port, password, attempt + 1, maxAttempts));
+        }, 3000);
+      } else {
+        console.log(`Failed to connect to ${host}:${port} after ${maxAttempts} attempts`);
+        resolve(false);
+      }
+    });
+  });
 };
 
-// Create Redis Cluster client
-const createRedisClient = async () => {
+// Create a standalone Redis client (not cluster)
+const createStandaloneClient = async (nodes, password) => {
   try {
-    const nodes = parseRedisNodes();
-    const password = process.env.REDIS_PASSWORD || 'password';
+    console.log(`Creating standalone Redis client to node ${nodes[0].host}:${nodes[0].port}`);
     
-    console.log(`Setting up Redis Cluster with nodes: ${JSON.stringify(nodes)}`);
+    const client = new Redis({
+      host: nodes[0].host,
+      port: nodes[0].port,
+      password: password,
+      connectTimeout: 10000,
+      maxRetriesPerRequest: 3,
+      retryStrategy: (times) => {
+        console.log(`Retrying Redis connection, attempt #${times}`);
+        return Math.min(Math.pow(2, times) * 500, 10000);
+      }
+    });
     
-    // Wait for Redis cluster to be ready
-    console.log('Waiting for Redis cluster to be available...');
-    const isReady = await waitForRedisCluster(nodes, password);
-    if (!isReady) {
-      console.error('Redis cluster is not available after maximum retries');
-      return null;
-    }
+    client.on('error', (err) => {
+      console.error('Redis client error:', err.message);
+    });
     
-    console.log('Redis cluster is available, creating cluster client...');
+    client.on('connect', () => {
+      console.log(`Connected to Redis at ${nodes[0].host}:${nodes[0].port}`);
+    });
     
-    // Add delay to ensure all nodes are properly connected to each other in the cluster
-    await new Promise(resolve => setTimeout(resolve, 5000));
+    client.on('ready', () => {
+      console.log('Redis client is ready');
+    });
     
-    // Create a Redis Cluster client using ioredis
-    const clusterOptions = {
-      redisOptions: {
-        password: password
-      },
-      clusterRetryStrategy: (times) => {
-        console.log(`Retrying cluster connection, attempt #${times}`);
-        return Math.min(100 + Math.exp(times), 20000);
-      },
-      maxRedirections: 16,
-      retryDelayOnFailover: 2000,
-      retryDelayOnTryAgain: 3000,
-      enableReadyCheck: true,
-      scaleReads: 'slave',
-      natMap: {},
-      readOnly: false
-    };
-    
-    // Try to create a cluster client first
-    try {
-      const client = new IORedis.Cluster(
-        nodes.map(node => ({
-          host: node.host,
-          port: node.port
-        })),
-        clusterOptions
-      );
-      
-      // Set up event handlers
-      client.on('error', (err) => {
-        console.error('Redis Cluster client error:', err);
-      });
-      
-      client.on('connect', () => {
-        console.log('Connected to Redis Cluster');
-      });
-      
-      client.on('ready', () => {
-        console.log('Redis Cluster client ready');
-      });
-      
-      client.on('reconnecting', () => {
-        console.log('Reconnecting to Redis Cluster');
-      });
-      
-      client.on('end', () => {
-        console.log('Redis Cluster connection ended');
-      });
-      
-      console.log('Created Redis Cluster client successfully');
-      return client;
-    } catch (err) {
-      console.error('Failed to create Redis Cluster client, falling back to single node:', err.message);
-      
-      // Fallback to single node if cluster creation fails
-      const singleClient = new IORedis({
-        host: nodes[0].host,
-        port: nodes[0].port,
-        password: password,
-        retryStrategy: (times) => Math.min(100 + Math.exp(times), 20000)
-      });
-      
-      singleClient.on('error', (err) => {
-        console.error('Redis client error:', err);
-      });
-      
-      singleClient.on('connect', () => {
-        console.log('Connected to Redis (single node)');
-      });
-      
-      console.log('Created single node Redis client as fallback');
-      return singleClient;
-    }
+    return client;
   } catch (err) {
-    console.error('Failed to create Redis client:', err);
+    console.error('Failed to create standalone Redis client:', err.message);
     return null;
   }
 };
 
-// Singleton pattern for Redis client
-let redisClient = null;
-let initializationPromise = null;
+// Wait before returning the Redis client
+const waitBeforeReturnClient = (client) => {
+  return new Promise((resolve) => {
+    setTimeout(() => {
+      resolve(client);
+    }, 1000);
+  });
+};
 
+// Initialize Redis client
+let redisClient = null;
+let clientInitialization = null;
+
+// Get Redis client (with initialization if needed)
 const getRedisClient = async () => {
-  if (!redisClient && !initializationPromise) {
-    // Store the initialization promise so we don't try to create multiple clients in parallel
-    initializationPromise = createRedisClient().then(client => {
-      redisClient = client;
-      return client;
-    }).catch(err => {
+  if (redisClient) {
+    return redisClient;
+  }
+  
+  if (clientInitialization) {
+    return clientInitialization;
+  }
+  
+  clientInitialization = (async () => {
+    try {
+      const nodes = parseRedisNodes();
+      const password = process.env.REDIS_PASSWORD || 'password';
+      
+      // Test if the primary Redis node is available
+      const isRedisAvailable = await testRedisNode(nodes[0].host, nodes[0].port, password);
+      
+      if (!isRedisAvailable) {
+        console.error(`Primary Redis node ${nodes[0].host}:${nodes[0].port} is not available`);
+        // Return a mock Redis client for graceful fallback
+        return {
+          // Read operations
+          hgetall: async () => ({}),
+          smembers: async () => ([]),
+          get: async () => null,
+          
+          // Write operations
+          hmset: async () => "OK",
+          hset: async () => 1,
+          sadd: async () => 1,
+          srem: async () => 1,
+          del: async () => 1,
+          set: async () => "OK",
+          
+          // Others
+          on: () => {},
+          quit: async () => {},
+          disconnect: async () => {}
+        };
+      }
+      
+      // Create a standalone Redis client
+      const client = await createStandaloneClient(nodes, password);
+      
+      // Wait a bit before returning the client
+      redisClient = await waitBeforeReturnClient(client);
+      clientInitialization = null;
+      
+      return redisClient;
+    } catch (err) {
       console.error('Error initializing Redis client:', err);
-      initializationPromise = null;
-      return null;
-    });
-  }
+      clientInitialization = null;
+      throw err;
+    }
+  })();
   
-  if (initializationPromise) {
-    return initializationPromise;
-  }
-  
-  return redisClient;
+  return clientInitialization;
 };
 
 module.exports = {

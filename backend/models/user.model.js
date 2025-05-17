@@ -30,19 +30,17 @@ const User = {
       // Generate a unique ID for Redis
       const id = `user:${Date.now()}`;
       
-      // Prepare fields for Redis hash - use array format for hmset
-      const fields = [
+      console.log(`Creating user in Redis with ID: ${id}`);
+      
+      // Store user as hash in Redis using hmset with field-value pairs
+      await client.hmset(
+        id,
         'id', id,
         'name', user.name,
         'email', user.email,
         'phone', user.phone || '',
         'created_at', new Date().toISOString()
-      ];
-      
-      console.log(`Creating user in Redis with ID: ${id}`);
-      
-      // Store user as hash in Redis
-      await client.hmset(id, ...fields);
+      );
       
       // Add to users set for listing
       await client.sadd('users', id);

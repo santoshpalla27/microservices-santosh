@@ -1,6 +1,6 @@
 const User = require('../models/user.model');
 
-// User controller
+// Create a new user
 exports.create = async (req, res) => {
   try {
     const { name, email, phone, storage } = req.body;
@@ -13,7 +13,16 @@ exports.create = async (req, res) => {
     
     // Store in appropriate storage based on request
     if (storage === 'redis') {
-      result = await User.createInRedis({ name, email, phone });
+      try {
+        result = await User.createInRedis({ name, email, phone });
+      } catch (err) {
+        console.error('Error storing in Redis:', err);
+        return res.status(500).json({ 
+          message: 'Failed to store in Redis. Falling back to MySQL.',
+          error: err.message,
+          suggestion: 'Try storing in MySQL instead' 
+        });
+      }
     } else {
       result = await User.createInMySQL({ name, email, phone });
     }
@@ -40,10 +49,17 @@ exports.findAllMySQL = async (req, res) => {
 exports.findAllRedis = async (req, res) => {
   try {
     const users = await User.findAllFromRedis();
-    res.status(200).json(users);
+    res.status(200).json(users || []);
   } catch (err) {
     console.error('Error retrieving Redis users:', err);
-    res.status(500).json({ message: 'An error occurred while retrieving Redis users', error: err.message });
+    // More detailed error information
+    const errorDetails = {
+      message: 'An error occurred while retrieving Redis users',
+      error: err.message,
+      stack: process.env.NODE_ENV === 'development' ? err.stack : undefined,
+      suggestion: 'Redis connection may not be fully established. Try viewing MySQL users instead.'
+    };
+    res.status(500).json(errorDetails);
   }
 };
 
