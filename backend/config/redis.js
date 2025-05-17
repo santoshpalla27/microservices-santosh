@@ -36,11 +36,23 @@ const initializeClusterViaDocker = () => {
   try {
     console.log('Attempting to initialize Redis Cluster via Docker exec...');
     
+    // Get container prefix
+    // This handles the case where the project name might be different
+    let containerPrefix = 'microservices-santosh';
+    try {
+      // Try to get the actual container name prefix
+      const containerName = execSync('hostname').toString().trim();
+      containerPrefix = containerName.split('-backend-')[0];
+      console.log(`Detected container prefix: ${containerPrefix}`);
+    } catch (err) {
+      console.warn('Could not detect container prefix, using default:', err.message);
+    }
+    
     // Reset all nodes first
     for (let i = 0; i < 6; i++) {
       try {
-        execSync(`docker exec microservices-santosh-redis-node-${i}-1 redis-cli -a redis_password FLUSHALL`, { stdio: 'ignore' });
-        execSync(`docker exec microservices-santosh-redis-node-${i}-1 redis-cli -a redis_password CLUSTER RESET`, { stdio: 'ignore' });
+        execSync(`docker exec ${containerPrefix}-redis-node-${i}-1 redis-cli -a redis_password FLUSHALL`, { stdio: 'ignore' });
+        execSync(`docker exec ${containerPrefix}-redis-node-${i}-1 redis-cli -a redis_password CLUSTER RESET`, { stdio: 'ignore' });
         console.log(`Reset redis-node-${i}`);
       } catch (err) {
         console.warn(`Error resetting redis-node-${i}:`, err.message);
@@ -54,7 +66,7 @@ const initializeClusterViaDocker = () => {
     let nodeIPs = [];
     for (let i = 0; i < 6; i++) {
       try {
-        const ip = execSync(`docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' microservices-santosh-redis-node-${i}-1`).toString().trim();
+        const ip = execSync(`docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' ${containerPrefix}-redis-node-${i}-1`).toString().trim();
         nodeIPs.push(`${ip}:6379`);
         console.log(`redis-node-${i} IP: ${ip}`);
       } catch (err) {
@@ -64,10 +76,11 @@ const initializeClusterViaDocker = () => {
     }
     
     // Create the cluster with proper replica configuration
-    const clusterCreateCmd = `docker exec microservices-santosh-redis-node-0-1 redis-cli -a redis_password --cluster create ${nodeIPs.join(' ')} --cluster-replicas 1 --cluster-yes`;
+    const clusterCreateCmd = `docker exec ${containerPrefix}-redis-node-0-1 redis-cli -a redis_password --cluster create ${nodeIPs.join(' ')} --cluster-replicas 1 --cluster-yes`;
     
     try {
-      execSync(clusterCreateCmd, { stdio: 'inherit' });
+      console.log("Running command:", clusterCreateCmd);
+      execSync(clusterCreateCmd);
       console.log('Redis Cluster created successfully');
     } catch (err) {
       console.error('Error creating Redis Cluster:', err.message);
@@ -76,7 +89,7 @@ const initializeClusterViaDocker = () => {
     
     // Check cluster state
     try {
-      const clusterInfo = execSync(`docker exec microservices-santosh-redis-node-0-1 redis-cli -a redis_password CLUSTER INFO`).toString();
+      const clusterInfo = execSync(`docker exec ${containerPrefix}-redis-node-0-1 redis-cli -a redis_password CLUSTER INFO`).toString();
       if (clusterInfo.includes('cluster_state:ok')) {
         console.log('Redis Cluster is now properly initialized');
         return true;
@@ -92,6 +105,36 @@ const initializeClusterViaDocker = () => {
     console.error('Error in cluster initialization via Docker:', err.message);
     return false;
   }
+};
+
+// Fallback function that just creates a local Redis with no clustering
+const fallbackToLocalRedis = () => {
+  console.log('Falling back to local non-clustered Redis...');
+
+  // Close existing client if open
+  try {
+    if (redisClient.isOpen) {
+      redisClient.quit().catch(() => {});
+    }
+  } catch (e) {}
+
+  // Create a new client pointing to a single Redis instance
+  global.redisClient = createClient({
+    url: `redis://:${process.env.REDIS_PASSWORD || 'redis_password'}@${process.env.REDIS_HOST || 'redis-node-0'}:${process.env.REDIS_PORT || '6379'}`,
+    socket: {
+      connectTimeout: 15000,
+      reconnectStrategy: (retries) => {
+        if (retries > 5) return new Error('Max retries reached');
+        return Math.min(retries * 500, 3000);
+      }
+    }
+  });
+
+  global.redisClient.on('error', (err) => {
+    console.error('Fallback Redis Error:', err);
+  });
+
+  return global.redisClient;
 };
 
 // Initialize Redis with retry logic and sample data
@@ -111,45 +154,83 @@ const initializeRedis = async (maxRetries = 5, delay = 5000) => {
         await redisClient.ping();
         console.log('Redis Cluster is responding to PING');
       } catch (pingErr) {
+        console.warn('Redis ping error:', pingErr.message);
         if (pingErr.message.includes('CLUSTERDOWN')) {
-          console.log('Redis Cluster is not initialized. Initializing...');
-          
-          // Use Docker exec to initialize the cluster (most reliable method)
+          console.log('Redis Cluster is down. Initializing cluster...');
           const initialized = initializeClusterViaDocker();
           
           if (!initialized) {
-            throw new Error('Failed to initialize Redis Cluster');
+            console.warn('Failed to initialize Redis Cluster. Will try again if needed.');
           }
           
           // Wait for cluster to stabilize
           await new Promise(resolve => setTimeout(resolve, 5000));
-        } else {
-          console.warn('Redis ping error:', pingErr.message);
+        }
+      }
+      
+      // Test if we can write to Redis
+      try {
+        await redisClient.set('test_key', 'test_value');
+        console.log('Successfully wrote test key to Redis');
+        await redisClient.del('test_key');
+      } catch (writeErr) {
+        console.error('Error writing to Redis:', writeErr.message);
+        
+        if (writeErr.message.includes('CLUSTERDOWN')) {
+          console.log('Redis Cluster is still down. Attempting re-initialization...');
+          const reinitialized = initializeClusterViaDocker();
+          
+          if (!reinitialized) {
+            console.warn('Re-initialization failed, continuing anyway...');
+          }
+          
+          await new Promise(resolve => setTimeout(resolve, 5000));
         }
       }
       
       // Add some sample data if Redis is empty
       try {
         // Try to get all keys, but allow failures
-        const keysCount = await redisClient.keys('*')
-          .then(keys => keys.length)
-          .catch((err) => {
-            console.error('Error getting keys:', err.message);
-            return 0;
-          });
+        let keysCount = 0;
+        try {
+          const keys = await redisClient.keys('*');
+          keysCount = keys.length;
+        } catch (keysErr) {
+          console.warn('Could not get keys count:', keysErr.message);
+        }
         
         // Try to add sample data, but allow failures
         try {
           if (keysCount === 0) {
             console.log('Adding sample data to Redis Cluster...');
-            await redisClient.set('redis_key_1', 'This is sample data 1 in Redis Cluster');
-            await redisClient.set('redis_key_2', 'This is sample data 2 in Redis Cluster');
-            console.log('Sample data added to Redis Cluster');
+            try {
+              await redisClient.set('redis_key_1', 'This is sample data 1 in Redis Cluster');
+              await redisClient.set('redis_key_2', 'This is sample data 2 in Redis Cluster');
+              console.log('Sample data added to Redis Cluster');
+            } catch (setErr) {
+              console.warn('Could not add sample data:', setErr.message);
+              
+              // If this is a CLUSTERDOWN error, try one more time to initialize
+              if (setErr.message.includes('CLUSTERDOWN')) {
+                console.log('Redis Cluster still down after multiple attempts. Last try...');
+                initializeClusterViaDocker();
+                
+                // If we still can't add data, just continue
+                try {
+                  await new Promise(resolve => setTimeout(resolve, 5000));
+                  await redisClient.set('redis_key_1', 'This is sample data 1 in Redis Cluster');
+                  await redisClient.set('redis_key_2', 'This is sample data 2 in Redis Cluster');
+                  console.log('Sample data added on final try');
+                } catch (finalErr) {
+                  console.warn('Final attempt to add sample data failed:', finalErr.message);
+                }
+              }
+            }
           } else {
             console.log(`Redis Cluster already has ${keysCount} keys`);
           }
-        } catch (setErr) {
-          console.warn('Could not add sample data:', setErr.message);
+        } catch (dataErr) {
+          console.warn('Error handling sample data:', dataErr.message);
         }
         
         console.log('Redis Cluster client initialized successfully');
