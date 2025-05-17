@@ -1,6 +1,37 @@
 version: '3.8'
 
 services:
+  # Start MySQL first
+  mysql:
+    image: mysql:8.0
+    ports:
+      - "3306:3306"
+    environment:
+      - MYSQL_ROOT_PASSWORD=password
+      - MYSQL_DATABASE=multitech
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./init-scripts:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-ppassword"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  # API Gateway and frontend can start in parallel
+  api-gateway:
+    build: ./api-gateway
+    ports:
+      - "8000:8000"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      - AUTH_SERVICE_URL=http://auth-service:4000
+      - TASK_SERVICE_URL=http://task-service:5000
+      - NOTIFICATION_SERVICE_URL=http://notification-service:8080
+      - ANALYTICS_SERVICE_URL=http://analytics-service:9000
+
   frontend:
     build: ./frontend
     ports:
@@ -8,29 +39,16 @@ services:
     depends_on:
       - api-gateway
     environment:
-      - REACT_APP_API_URL=http://3.84.208.17:8000
+      - REACT_APP_API_URL=http://localhost:8000
 
-  api-gateway:
-    build: ./api-gateway
-    ports:
-      - "8000:8000"
-    depends_on:
-      - auth-service
-      - task-service
-      - notification-service
-      - analytics-service
-    environment:
-      - AUTH_SERVICE_URL=http://auth-service:4000
-      - TASK_SERVICE_URL=http://task-service:5000
-      - NOTIFICATION_SERVICE_URL=http://notification-service:8080
-      - ANALYTICS_SERVICE_URL=http://analytics-service:9000
-
+  # Backend services should wait for MySQL
   auth-service:
     build: ./auth-service
     ports:
       - "4000:4000"
     depends_on:
-      - mysql
+      mysql:
+        condition: service_healthy
     environment:
       - DB_HOST=mysql
       - DB_USER=root
@@ -43,7 +61,8 @@ services:
     ports:
       - "5000:5000"
     depends_on:
-      - mysql
+      mysql:
+        condition: service_healthy
     environment:
       - DB_HOST=mysql
       - DB_USER=root
@@ -55,7 +74,8 @@ services:
     ports:
       - "8080:8080"
     depends_on:
-      - mysql
+      mysql:
+        condition: service_healthy
     environment:
       - SPRING_DATASOURCE_URL=jdbc:mysql://mysql:3306/multitech_notifications
       - SPRING_DATASOURCE_USERNAME=root
@@ -66,23 +86,13 @@ services:
     ports:
       - "9000:9000"
     depends_on:
-      - mysql
+      mysql:
+        condition: service_healthy
     environment:
       - DB_HOST=mysql
       - DB_USER=root
       - DB_PASSWORD=password
       - DB_NAME=multitech_analytics
-
-  mysql:
-    image: mysql:8.0
-    ports:
-      - "3306:3306"
-    environment:
-      - MYSQL_ROOT_PASSWORD=password
-      - MYSQL_DATABASE=multitech
-    volumes:
-      - mysql-data:/var/lib/mysql
-      - ./init-scripts:/docker-entrypoint-initdb.d
 
 volumes:
   mysql-data:
