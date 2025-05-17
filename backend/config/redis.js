@@ -1,9 +1,57 @@
 const { createClient } = require('redis');
-const { execSync } = require('child_process');
 
-// Create a Redis client that can work with Redis Cluster
+// Define all Redis nodes in the cluster
+const REDIS_NODES = [
+  'redis-node-0:6379',
+  'redis-node-1:6379', 
+  'redis-node-2:6379',
+  'redis-node-3:6379',
+  'redis-node-4:6379',
+  'redis-node-5:6379'
+];
+
+// Try multiple nodes until finding one that responds
+const tryNodes = async () => {
+  for (const node of REDIS_NODES) {
+    const client = createClient({
+      url: `redis://:${process.env.REDIS_PASSWORD || 'redis_password'}@${node}`,
+      socket: {
+        connectTimeout: 3000,
+        reconnectStrategy: false
+      }
+    });
+    
+    try {
+      await client.connect();
+      await client.ping();
+      console.log(`Node ${node} is responsive`);
+      await client.quit();
+      return node;
+    } catch (err) {
+      console.warn(`Node ${node} is not responsive:`, err.message);
+      try {
+        await client.quit();
+      } catch (e) { /* ignore */ }
+    }
+  }
+  
+  // If no nodes responded, return the first one as default
+  return REDIS_NODES[0];
+};
+
+let activeRedisNode = REDIS_NODES[0]; // Default to first node
+(async () => {
+  try {
+    activeRedisNode = await tryNodes();
+    console.log(`Using Redis node: ${activeRedisNode}`);
+  } catch (err) {
+    console.error('Error finding responsive Redis node:', err.message);
+  }
+})();
+
+// Create a Redis client that will work with Redis Cluster
 const redisClient = createClient({
-  url: `redis://:${process.env.REDIS_PASSWORD || 'redis_password'}@${process.env.REDIS_HOST || 'redis-node-0'}:${process.env.REDIS_PORT || '6379'}`,
+  url: `redis://:${process.env.REDIS_PASSWORD || 'redis_password'}@${activeRedisNode}`,
   socket: {
     reconnectStrategy: (retries) => {
       if (retries > 10) {
@@ -31,115 +79,193 @@ redisClient.on('connect', () => {
   console.log('Redis client connected successfully');
 });
 
-// Helper function to initialize cluster using Docker exec (more reliable than Redis commands)
-const initializeClusterViaDocker = () => {
-  try {
-    console.log('Attempting to initialize Redis Cluster via Docker exec...');
-    
-    // Get container prefix
-    // This handles the case where the project name might be different
-    let containerPrefix = 'microservices-santosh';
+// In-memory fallback for when Redis is completely unavailable
+const inMemoryStore = new Map();
+
+// Wrapper functions to handle Redis Cluster errors with retry
+const redisOps = {
+  async get(key) {
     try {
-      // Try to get the actual container name prefix
-      const containerName = execSync('hostname').toString().trim();
-      containerPrefix = containerName.split('-backend-')[0];
-      console.log(`Detected container prefix: ${containerPrefix}`);
+      return await redisClient.get(key);
     } catch (err) {
-      console.warn('Could not detect container prefix, using default:', err.message);
-    }
-    
-    // Reset all nodes first
-    for (let i = 0; i < 6; i++) {
-      try {
-        execSync(`docker exec ${containerPrefix}-redis-node-${i}-1 redis-cli -a redis_password FLUSHALL`, { stdio: 'ignore' });
-        execSync(`docker exec ${containerPrefix}-redis-node-${i}-1 redis-cli -a redis_password CLUSTER RESET`, { stdio: 'ignore' });
-        console.log(`Reset redis-node-${i}`);
-      } catch (err) {
-        console.warn(`Error resetting redis-node-${i}:`, err.message);
+      // If MOVED error, follow the redirection
+      if (err.message.includes('MOVED') || err.message.includes('ASK')) {
+        try {
+          // Parse redirection info (example: "MOVED 3999 127.0.0.1:6381")
+          const parts = err.message.split(' ');
+          if (parts.length >= 3) {
+            const redirectNode = parts[2];
+            console.log(`Key ${key} is in node ${redirectNode}, following redirection...`);
+            
+            // Create a new client for the redirect target
+            const redirectClient = createClient({
+              url: `redis://:${process.env.REDIS_PASSWORD || 'redis_password'}@${redirectNode}`,
+              socket: { connectTimeout: 3000 }
+            });
+            
+            try {
+              await redirectClient.connect();
+              const result = await redirectClient.get(key);
+              await redirectClient.quit();
+              return result;
+            } catch (redirectErr) {
+              console.error(`Error following redirection to ${redirectNode}:`, redirectErr.message);
+              await redirectClient.quit();
+              throw redirectErr;
+            }
+          }
+        } catch (parseErr) {
+          console.error('Error parsing redirection info:', parseErr.message);
+        }
       }
-    }
-    
-    // Sleep to let nodes stabilize
-    execSync('sleep 5');
-    
-    // Get the IPs of all nodes
-    let nodeIPs = [];
-    for (let i = 0; i < 6; i++) {
-      try {
-        const ip = execSync(`docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' ${containerPrefix}-redis-node-${i}-1`).toString().trim();
-        nodeIPs.push(`${ip}:6379`);
-        console.log(`redis-node-${i} IP: ${ip}`);
-      } catch (err) {
-        console.error(`Could not get IP for redis-node-${i}:`, err.message);
-        return false;
-      }
-    }
-    
-    // Create the cluster with proper replica configuration
-    const clusterCreateCmd = `docker exec ${containerPrefix}-redis-node-0-1 redis-cli -a redis_password --cluster create ${nodeIPs.join(' ')} --cluster-replicas 1 --cluster-yes`;
-    
-    try {
-      console.log("Running command:", clusterCreateCmd);
-      execSync(clusterCreateCmd);
-      console.log('Redis Cluster created successfully');
-    } catch (err) {
-      console.error('Error creating Redis Cluster:', err.message);
-      return false;
-    }
-    
-    // Check cluster state
-    try {
-      const clusterInfo = execSync(`docker exec ${containerPrefix}-redis-node-0-1 redis-cli -a redis_password CLUSTER INFO`).toString();
-      if (clusterInfo.includes('cluster_state:ok')) {
-        console.log('Redis Cluster is now properly initialized');
-        return true;
+      
+      // Handle CLUSTERDOWN error
+      if (err.message.includes('CLUSTERDOWN')) {
+        console.warn(`Redis Cluster is down, using in-memory fallback for key ${key}`);
       } else {
-        console.error('Cluster initialization failed, cluster state is not OK');
-        return false;
+        console.warn(`Redis get error for key ${key}, using in-memory fallback:`, err.message);
       }
+      
+      return inMemoryStore.get(key);
+    }
+  },
+  
+  async set(key, value) {
+    try {
+      await redisClient.set(key, value);
     } catch (err) {
-      console.error('Error checking cluster state:', err.message);
-      return false;
+      // If MOVED error, follow the redirection
+      if (err.message.includes('MOVED') || err.message.includes('ASK')) {
+        try {
+          // Parse redirection info (example: "MOVED 3999 127.0.0.1:6381")
+          const parts = err.message.split(' ');
+          if (parts.length >= 3) {
+            const redirectNode = parts[2];
+            console.log(`Key ${key} is in node ${redirectNode}, following redirection...`);
+            
+            // Create a new client for the redirect target
+            const redirectClient = createClient({
+              url: `redis://:${process.env.REDIS_PASSWORD || 'redis_password'}@${redirectNode}`,
+              socket: { connectTimeout: 3000 }
+            });
+            
+            try {
+              await redirectClient.connect();
+              await redirectClient.set(key, value);
+              await redirectClient.quit();
+              return;
+            } catch (redirectErr) {
+              console.error(`Error following redirection to ${redirectNode}:`, redirectErr.message);
+              await redirectClient.quit();
+              throw redirectErr;
+            }
+          }
+        } catch (parseErr) {
+          console.error('Error parsing redirection info:', parseErr.message);
+        }
+      }
+      
+      // Handle CLUSTERDOWN error
+      if (err.message.includes('CLUSTERDOWN')) {
+        console.warn(`Redis Cluster is down, using in-memory fallback for key ${key}`);
+      } else {
+        console.warn(`Redis set error for key ${key}, using in-memory fallback:`, err.message);
+      }
+      
+      inMemoryStore.set(key, value);
     }
-  } catch (err) {
-    console.error('Error in cluster initialization via Docker:', err.message);
-    return false;
-  }
-};
-
-// Fallback function that just creates a local Redis with no clustering
-const fallbackToLocalRedis = () => {
-  console.log('Falling back to local non-clustered Redis...');
-
-  // Close existing client if open
-  try {
-    if (redisClient.isOpen) {
-      redisClient.quit().catch(() => {});
-    }
-  } catch (e) {}
-
-  // Create a new client pointing to a single Redis instance
-  global.redisClient = createClient({
-    url: `redis://:${process.env.REDIS_PASSWORD || 'redis_password'}@${process.env.REDIS_HOST || 'redis-node-0'}:${process.env.REDIS_PORT || '6379'}`,
-    socket: {
-      connectTimeout: 15000,
-      reconnectStrategy: (retries) => {
-        if (retries > 5) return new Error('Max retries reached');
-        return Math.min(retries * 500, 3000);
+  },
+  
+  async keys(pattern) {
+    const results = new Set();
+    
+    try {
+      // Try to get keys from the first node
+      const keys = await redisClient.keys(pattern);
+      keys.forEach(key => results.add(key));
+    } catch (err) {
+      console.warn(`Error getting keys from Redis Cluster:`, err.message);
+      
+      // If cluster is down, use in-memory fallback
+      if (err.message.includes('CLUSTERDOWN')) {
+        console.warn('Redis Cluster is down, using in-memory fallback for keys query');
+        // Simple glob pattern matching for in-memory
+        const allKeys = Array.from(inMemoryStore.keys());
+        if (pattern === '*') return allKeys;
+        return allKeys.filter(key => key.includes(pattern.replace('*', '')));
+      }
+      
+      // Try each node individually
+      for (const node of REDIS_NODES) {
+        try {
+          const nodeClient = createClient({
+            url: `redis://:${process.env.REDIS_PASSWORD || 'redis_password'}@${node}`,
+            socket: { connectTimeout: 3000 }
+          });
+          
+          await nodeClient.connect();
+          const nodeKeys = await nodeClient.keys(pattern);
+          nodeKeys.forEach(key => results.add(key));
+          await nodeClient.quit();
+        } catch (nodeErr) {
+          console.warn(`Error getting keys from node ${node}:`, nodeErr.message);
+        }
       }
     }
-  });
-
-  global.redisClient.on('error', (err) => {
-    console.error('Fallback Redis Error:', err);
-  });
-
-  return global.redisClient;
+    
+    // If no keys were found in Redis, use in-memory fallback
+    if (results.size === 0) {
+      const allKeys = Array.from(inMemoryStore.keys());
+      if (pattern === '*') return allKeys;
+      return allKeys.filter(key => key.includes(pattern.replace('*', '')));
+    }
+    
+    return Array.from(results);
+  },
+  
+  async del(key) {
+    try {
+      await redisClient.del(key);
+    } catch (err) {
+      // If MOVED error, follow the redirection
+      if (err.message.includes('MOVED') || err.message.includes('ASK')) {
+        try {
+          // Parse redirection info
+          const parts = err.message.split(' ');
+          if (parts.length >= 3) {
+            const redirectNode = parts[2];
+            
+            // Create a new client for the redirect target
+            const redirectClient = createClient({
+              url: `redis://:${process.env.REDIS_PASSWORD || 'redis_password'}@${redirectNode}`,
+              socket: { connectTimeout: 3000 }
+            });
+            
+            try {
+              await redirectClient.connect();
+              await redirectClient.del(key);
+              await redirectClient.quit();
+              return;
+            } catch (redirectErr) {
+              console.error(`Error following redirection to ${redirectNode}:`, redirectErr.message);
+              await redirectClient.quit();
+            }
+          }
+        } catch (parseErr) {
+          console.error('Error parsing redirection info:', parseErr.message);
+        }
+      }
+      
+      console.warn(`Redis del error for key ${key}, using in-memory fallback:`, err.message);
+      inMemoryStore.delete(key);
+    }
+  }
 };
 
 // Initialize Redis with retry logic and sample data
 const initializeRedis = async (maxRetries = 5, delay = 5000) => {
   let retries = 0;
+  let redisAvailable = false;
   
   while (retries < maxRetries) {
     try {
@@ -149,103 +275,69 @@ const initializeRedis = async (maxRetries = 5, delay = 5000) => {
         console.log('Connected to Redis Cluster successfully');
       }
       
-      // Check if we can perform operations, if not - initialize the cluster
+      // Check if Redis is responsive
       try {
         await redisClient.ping();
         console.log('Redis Cluster is responding to PING');
+        redisAvailable = true;
       } catch (pingErr) {
         console.warn('Redis ping error:', pingErr.message);
-        if (pingErr.message.includes('CLUSTERDOWN')) {
-          console.log('Redis Cluster is down. Initializing cluster...');
-          const initialized = initializeClusterViaDocker();
-          
-          if (!initialized) {
-            console.warn('Failed to initialize Redis Cluster. Will try again if needed.');
-          }
-          
-          // Wait for cluster to stabilize
-          await new Promise(resolve => setTimeout(resolve, 5000));
-        }
-      }
-      
-      // Test if we can write to Redis
-      try {
-        await redisClient.set('test_key', 'test_value');
-        console.log('Successfully wrote test key to Redis');
-        await redisClient.del('test_key');
-      } catch (writeErr) {
-        console.error('Error writing to Redis:', writeErr.message);
+        redisAvailable = false;
         
-        if (writeErr.message.includes('CLUSTERDOWN')) {
-          console.log('Redis Cluster is still down. Attempting re-initialization...');
-          const reinitialized = initializeClusterViaDocker();
+        // Try another node if this one fails
+        if (pingErr.message.includes('CLUSTERDOWN') || pingErr.message.includes('MOVED')) {
+          const newNode = await tryNodes();
+          console.log(`Switching to Redis node: ${newNode}`);
           
-          if (!reinitialized) {
-            console.warn('Re-initialization failed, continuing anyway...');
-          }
+          // Close the current client
+          try {
+            await redisClient.quit();
+          } catch (e) { /* ignore */ }
           
-          await new Promise(resolve => setTimeout(resolve, 5000));
-        }
-      }
-      
-      // Add some sample data if Redis is empty
-      try {
-        // Try to get all keys, but allow failures
-        let keysCount = 0;
-        try {
-          const keys = await redisClient.keys('*');
-          keysCount = keys.length;
-        } catch (keysErr) {
-          console.warn('Could not get keys count:', keysErr.message);
-        }
-        
-        // Try to add sample data, but allow failures
-        try {
-          if (keysCount === 0) {
-            console.log('Adding sample data to Redis Cluster...');
-            try {
-              await redisClient.set('redis_key_1', 'This is sample data 1 in Redis Cluster');
-              await redisClient.set('redis_key_2', 'This is sample data 2 in Redis Cluster');
-              console.log('Sample data added to Redis Cluster');
-            } catch (setErr) {
-              console.warn('Could not add sample data:', setErr.message);
-              
-              // If this is a CLUSTERDOWN error, try one more time to initialize
-              if (setErr.message.includes('CLUSTERDOWN')) {
-                console.log('Redis Cluster still down after multiple attempts. Last try...');
-                initializeClusterViaDocker();
-                
-                // If we still can't add data, just continue
-                try {
-                  await new Promise(resolve => setTimeout(resolve, 5000));
-                  await redisClient.set('redis_key_1', 'This is sample data 1 in Redis Cluster');
-                  await redisClient.set('redis_key_2', 'This is sample data 2 in Redis Cluster');
-                  console.log('Sample data added on final try');
-                } catch (finalErr) {
-                  console.warn('Final attempt to add sample data failed:', finalErr.message);
-                }
+          // Create a new client with the responsive node
+          redisClient = createClient({
+            url: `redis://:${process.env.REDIS_PASSWORD || 'redis_password'}@${newNode}`,
+            socket: {
+              reconnectStrategy: (retries) => {
+                if (retries > 5) return new Error('Max retries reached');
+                return Math.min(Math.pow(2, retries) * 100, 5000);
               }
             }
-          } else {
-            console.log(`Redis Cluster already has ${keysCount} keys`);
-          }
-        } catch (dataErr) {
-          console.warn('Error handling sample data:', dataErr.message);
+          });
+          
+          // Re-add event handlers
+          redisClient.on('error', err => console.error('Redis Client Error:', err));
+          redisClient.on('reconnecting', () => console.log('Redis client attempting to reconnect...'));
+          redisClient.on('connect', () => console.log('Redis client connected successfully'));
+          
+          // Try to connect again
+          await redisClient.connect();
         }
-        
-        console.log('Redis Cluster client initialized successfully');
-        return true;
-      } catch (dataError) {
-        console.warn('Could not check Redis keys:', dataError.message);
-        // Continue anyway as this is not critical
-        return true;
       }
+      
+      // Add sample data, using fallback if needed
+      try {
+        console.log('Adding sample data to Redis Cluster...');
+        await redisOps.set('redis_key_1', 'This is sample data 1 in Redis Cluster');
+        await redisOps.set('redis_key_2', 'This is sample data 2 in Redis Cluster');
+        console.log('Sample data added to Redis Cluster');
+      } catch (err) {
+        console.warn('Error adding sample data:', err.message);
+      }
+      
+      if (redisAvailable) {
+        console.log('Redis Cluster client initialized successfully');
+      } else {
+        console.log('Using in-memory fallback for Redis operations');
+      }
+      
+      return true;
     } catch (error) {
       retries++;
       console.error(`Redis Cluster initialization attempt ${retries} failed:`, error.message);
       
       if (retries >= maxRetries) {
-        console.error('Max retries reached. Unable to initialize Redis Cluster');
+        console.error('Max retries reached. Using in-memory fallback only.');
         return false;
       }
       
@@ -259,5 +351,6 @@ const initializeRedis = async (maxRetries = 5, delay = 5000) => {
 
 module.exports = {
   redisClient,
+  redisOps,
   initializeRedis
 };
