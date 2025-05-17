@@ -8,7 +8,7 @@ services:
     depends_on:
       - backend
     environment:
-      - REACT_APP_API_URL=http://54.242.224.215:5000
+      - REACT_APP_API_URL=http://54.242.224.215:5000/api
     volumes:
       - ./frontend:/app
       - /app/node_modules
@@ -45,32 +45,15 @@ services:
       - postgres-data:/var/lib/postgresql/data
       - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql
 
-  redis-master:
+  redis:
     image: redis:6-alpine
     ports:
       - "6379:6379"
     volumes:
-      - redis-master-data:/data
+      - redis-data:/data
     command: redis-server --appendonly yes
-
-  redis-replica-1:
-    image: redis:6-alpine
-    depends_on:
-      - redis-master
-    command: redis-server --slaveof redis-master 6379 --appendonly yes
-    volumes:
-      - redis-replica-1-data:/data
-
-  redis-replica-2:
-    image: redis:6-alpine
-    depends_on:
-      - redis-master
-    command: redis-server --slaveof redis-master 6379 --appendonly yes
-    volumes:
-      - redis-replica-2-data:/data
+    restart: unless-stopped
       
 volumes:
   postgres-data:
-  redis-master-data:
-  redis-replica-1-data:
-  redis-replica-2-data:
+  redis-data:
