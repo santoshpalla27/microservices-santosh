@@ -1,49 +1,58 @@
 import axios from 'axios';
 
+// Set base URL from environment variable
 const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
 
-// Data API service
+// Create an axios instance
+const apiClient = axios.create({
+  baseURL: API_URL,
+  headers: {
+    'Content-Type': 'application/json'
+  }
+});
+
+// API service functions
 const api = {
-  // PostgreSQL operations
-  saveToPostgres: async (key, value) => {
-    try {
-      const response = await axios.post(`${API_URL}/data/postgres`, { key, value });
-      return response.data;
-    } catch (error) {
-      console.error('Error saving to PostgreSQL:', error);
-      throw error;
-    }
+  // Create a new user
+  createUser: async (userData) => {
+    const response = await apiClient.post('/users', userData);
+    return response.data;
   },
   
-  getAllFromPostgres: async () => {
-    try {
-      const response = await axios.get(`${API_URL}/data/postgres`);
-      return response.data;
-    } catch (error) {
-      console.error('Error fetching PostgreSQL data:', error);
-      throw error;
-    }
+  // Get all users from MySQL
+  getMySQLUsers: async () => {
+    const response = await apiClient.get('/users/mysql');
+    return response.data;
   },
   
-  // Redis operations
-  saveToRedis: async (key, value) => {
-    try {
-      const response = await axios.post(`${API_URL}/data/redis`, { key, value });
-      return response.data;
-    } catch (error) {
-      console.error('Error saving to Redis:', error);
-      throw error;
-    }
+  // Get all users from Redis
+  getRedisUsers: async () => {
+    const response = await apiClient.get('/users/redis');
+    return response.data;
   },
   
-  getAllFromRedis: async () => {
-    try {
-      const response = await axios.get(`${API_URL}/data/redis`);
-      return response.data;
-    } catch (error) {
-      console.error('Error fetching Redis data:', error);
-      throw error;
-    }
+  // Get a single user from MySQL by ID
+  getMySQLUser: async (id) => {
+    const response = await apiClient.get(`/users/mysql/${id}`);
+    return response.data;
+  },
+  
+  // Get a single user from Redis by ID
+  getRedisUser: async (id) => {
+    const response = await apiClient.get(`/users/redis/${id}`);
+    return response.data;
+  },
+  
+  // Delete a user from MySQL
+  deleteMySQLUser: async (id) => {
+    const response = await apiClient.delete(`/users/mysql/${id}`);
+    return response.data;
+  },
+  
+  // Delete a user from Redis
+  deleteRedisUser: async (id) => {
+    const response = await apiClient.delete(`/users/redis/${id}`);
+    return response.data;
   }
 };
 

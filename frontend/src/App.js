@@ -1,86 +1,49 @@
-import React from 'react';
-import { Routes, Route } from 'react-router-dom';
-
-// Components
-import Navigation from './components/Navigation-alt';
-import DataForm from './components/DataForm-alt';
-import PostgresData from './components/PostgresData-alt';
-import RedisData from './components/RedisData-alt';
-import DatabaseStatus from './components/DatabaseStatus';
-
-// Home page component with architecture diagram
-const Home = () => (
-  <div>
-    <DatabaseStatus />
-    
-    <div className="card mb-4">
-      <h2 className="card-title">Data Flow Application</h2>
-      <p className="mb-4">
-        This application demonstrates connectivity between a React frontend, Node.js/Express backend, 
-        PostgreSQL database, and Redis Cluster for in-memory storage.
-      </p>
-      
-      <div className="p-4 mb-4" style={{backgroundColor: '#f8f9fa', borderRadius: '8px'}}>
-        <h3 className="text-center mb-4">Application Architecture</h3>
-        
-        <div className="grid grid-cols-2">
-          {/* Frontend */}
-          <div className="p-3 text-center mb-3" style={{backgroundColor: '#e6f2ff', borderRadius: '8px', margin: '8px'}}>
-            <div className="text-center mb-2" style={{fontSize: '2rem'}}>🌐</div>
-            <div>
-              <h3 className="font-bold">Frontend</h3>
-              <p className="text-sm">React</p>
-            </div>
-          </div>
-          
-          {/* Backend */}
-          <div className="p-3 text-center mb-3" style={{backgroundColor: '#e6ffe6', borderRadius: '8px', margin: '8px'}}>
-            <div className="text-center mb-2" style={{fontSize: '2rem'}}>🖥️</div>
-            <div>
-              <h3 className="font-bold">Backend</h3>
-              <p className="text-sm">Node.js/Express</p>
-            </div>
-          </div>
-          
-          {/* PostgreSQL */}
-          <div className="p-3 text-center" style={{backgroundColor: '#f0e6ff', borderRadius: '8px', margin: '8px'}}>
-            <div className="text-center mb-2" style={{fontSize: '2rem'}}>💾</div>
-            <div>
-              <h3 className="font-bold">PostgreSQL</h3>
-              <p className="text-sm">Persistent Storage</p>
-            </div>
-          </div>
-          
-          {/* Redis */}
-          <div className="p-3 text-center" style={{backgroundColor: '#ffe6e6', borderRadius: '8px', margin: '8px'}}>
-            <div className="text-center mb-2" style={{fontSize: '2rem'}}>📊</div>
-            <div>
-              <h3 className="font-bold">Redis Cluster</h3>
-              <p className="text-sm">In-memory Storage</p>
-            </div>
-          </div>
-        </div>
-      </div>
-      
-      <div className="text-center text-sm" style={{color: '#666'}}>
-        <p>The application allows storing data in either PostgreSQL or Redis and viewing data from both sources.</p>
-      </div>
-    </div>
-    
-    <DataForm />
-  </div>
-);
+import React, { useState } from 'react';
+import { ToastContainer, toast } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
+import Header from './components/Header';
+import UserForm from './components/UserForm';
+import MySQLUsers from './components/MySQLUsers';
+import RedisUsers from './components/RedisUsers';
+import './App.css';
 
 function App() {
+  const [activeTab, setActiveTab] = useState('mysql');
+  const [refreshData, setRefreshData] = useState(0);
+
+  const handleRefresh = () => {
+    setRefreshData(prev => prev + 1);
+    toast.success('Data refreshed successfully!');
+  };
+
   return (
-    <div>
-      <Navigation />
-      <div className="container" style={{padding: '16px'}}>
-        <Routes>
-          <Route path="/" element={<Home />} />
-          <Route path="/postgres" element={<PostgresData />} />
-          <Route path="/redis" element={<RedisData />} />
-        </Routes>
+    <div className="app-container">
+      <ToastContainer position="top-right" autoClose={3000} />
+      <Header />
+      
+      <UserForm onSuccess={handleRefresh} />
+      
+      <div className="tabs">
+        <button 
+          className={`tab-btn ${activeTab === 'mysql' ? 'active' : ''}`}
+          onClick={() => setActiveTab('mysql')}
+        >
+          MySQL Users
+        </button>
+        <button 
+          className={`tab-btn ${activeTab === 'redis' ? 'active' : ''}`}
+          onClick={() => setActiveTab('redis')}
+        >
+          Redis Users
+        </button>
+      </div>
+      
+      <div className="tab-content">
+        {activeTab === 'mysql' ? (
+          <MySQLUsers refreshTrigger={refreshData} onDelete={handleRefresh} />
+        ) : (
+          <RedisUsers refreshTrigger={refreshData} onDelete={handleRefresh} />
+        )}
       </div>
     </div>
   );

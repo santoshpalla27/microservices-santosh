@@ -1,42 +1,32 @@
 const express = require('express');
+const bodyParser = require('body-parser');
 const cors = require('cors');
-const { initializeDb } = require('./config/postgres');
-const { initializeRedis } = require('./config/redis');
-const dataRoutes = require('./routes/data');
+const dotenv = require('dotenv');
 
-// Initialize Express app
+// Load environment variables
+dotenv.config();
+
 const app = express();
-const PORT = process.env.PORT || 5000;
 
 // Middleware
 app.use(cors());
-app.use(express.json());
+app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({ extended: true }));
 
-// Routes
-app.use('/api/data', dataRoutes);
+// Database connection setup
+const db = require('./config/db.config');
+const redis = require('./config/redis.config');
 
-// Health check endpoint
-app.get('/health', (req, res) => {
-  res.json({ status: 'UP' });
+// Simple route for testing
+app.get('/', (req, res) => {
+  res.json({ message: 'Welcome to User Record Application' });
 });
 
-// Initialize databases before starting the server
-const startServer = async () => {
-  try {
-    // Initialize PostgreSQL
-    await initializeDb();
-    
-    // Initialize Redis
-    await initializeRedis();
-    
-    // Start the server
-    app.listen(PORT, () => {
-      console.log(`Server running on port ${PORT}`);
-    });
-  } catch (error) {
-    console.error('Failed to start server:', error);
-    process.exit(1);
-  }
-};
+// Routes
+require('./routes/user.routes')(app);
 
-startServer();
+// Set port and start server
+const PORT = process.env.PORT || 5000;
+app.listen(PORT, () => {
+  console.log(`Server is running on port ${PORT}.`);
+});
