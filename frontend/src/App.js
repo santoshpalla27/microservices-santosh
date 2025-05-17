@@ -1,148 +1,84 @@
-import React, { useState, useEffect } from 'react';
-import Header from './components/Header';
-import TaskList from './components/TaskList';
-import TaskForm from './components/TaskForm';
-import LoginForm from './components/LoginForm';
-import { getTasks, createTask, updateTask, deleteTask, login } from './services/api';
+import React from 'react';
+import { Routes, Route } from 'react-router-dom';
+
+// Components
+import Navigation from './components/Navigation-alt';
+import DataForm from './components/DataForm-alt';
+import PostgresData from './components/PostgresData-alt';
+import RedisData from './components/RedisData-alt';
+
+// Home page component with architecture diagram
+const Home = () => (
+  <div>
+    <div className="card mb-4">
+      <h2 className="card-title">Data Flow Application</h2>
+      <p className="mb-4">
+        This application demonstrates connectivity between a React frontend, Node.js/Express backend, 
+        PostgreSQL database, and Redis in-memory store.
+      </p>
+      
+      <div className="p-4 mb-4" style={{backgroundColor: '#f8f9fa', borderRadius: '8px'}}>
+        <h3 className="text-center mb-4">Application Architecture</h3>
+        
+        <div className="grid grid-cols-2">
+          {/* Frontend */}
+          <div className="p-3 text-center mb-3" style={{backgroundColor: '#e6f2ff', borderRadius: '8px', margin: '8px'}}>
+            <div className="text-center mb-2" style={{fontSize: '2rem'}}>🌐</div>
+            <div>
+              <h3 className="font-bold">Frontend</h3>
+              <p className="text-sm">React</p>
+            </div>
+          </div>
+          
+          {/* Backend */}
+          <div className="p-3 text-center mb-3" style={{backgroundColor: '#e6ffe6', borderRadius: '8px', margin: '8px'}}>
+            <div className="text-center mb-2" style={{fontSize: '2rem'}}>🖥️</div>
+            <div>
+              <h3 className="font-bold">Backend</h3>
+              <p className="text-sm">Node.js/Express</p>
+            </div>
+          </div>
+          
+          {/* PostgreSQL */}
+          <div className="p-3 text-center" style={{backgroundColor: '#f0e6ff', borderRadius: '8px', margin: '8px'}}>
+            <div className="text-center mb-2" style={{fontSize: '2rem'}}>💾</div>
+            <div>
+              <h3 className="font-bold">PostgreSQL</h3>
+              <p className="text-sm">Persistent Storage</p>
+            </div>
+          </div>
+          
+          {/* Redis */}
+          <div className="p-3 text-center" style={{backgroundColor: '#ffe6e6', borderRadius: '8px', margin: '8px'}}>
+            <div className="text-center mb-2" style={{fontSize: '2rem'}}>📊</div>
+            <div>
+              <h3 className="font-bold">Redis</h3>
+              <p className="text-sm">In-memory Storage</p>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <div className="text-center text-sm" style={{color: '#666'}}>
+        <p>The application allows storing data in either PostgreSQL or Redis and viewing data from both sources.</p>
+      </div>
+    </div>
+    
+    <DataForm />
+  </div>
+);
 
 function App() {
-  const [tasks, setTasks] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [errorMessage, setErrorMessage] = useState('');
-
-  useEffect(() => {
-    // Check if we have a token
-    const token = localStorage.getItem('token');
-    if (token) {
-      setIsAuthenticated(true);
-      fetchTasks();
-    } else {
-      setIsLoading(false);
-    }
-  }, []);
-
-  const fetchTasks = async () => {
-    try {
-      const data = await getTasks();
-      setTasks(data);
-      setIsLoading(false);
-      setErrorMessage('');
-    } catch (error) {
-      console.error('Error fetching tasks:', error);
-      setIsLoading(false);
-      setErrorMessage('Could not load tasks. Using demo data.');
-      // Use some sample data even if the fetch fails
-      setTasks([
-        {
-          id: 1,
-          title: 'Complete project documentation',
-          description: 'Document the microservices architecture',
-          dueDate: '2025-05-30',
-          completed: false,
-        },
-        {
-          id: 2,
-          title: 'Fix authentication',
-          description: 'Resolve JWT token issues in the API gateway',
-          dueDate: '2025-05-20',
-          completed: true,
-        },
-      ]);
-    }
-  };
-
-  const handleLogin = async (credentials) => {
-    console.log('Login handler called with:', credentials);
-    try {
-      // For demo, just accept any login
-      // In a real app, you'd verify with the backend
-      console.log('Setting demo token');
-      localStorage.setItem('token', 'demo-jwt-token');
-      setIsAuthenticated(true);
-      setErrorMessage('');
-      fetchTasks();
-    } catch (error) {
-      console.error('Login error:', error);
-      setErrorMessage('Login failed. Please check your credentials.');
-    }
-  };
-
-  const handleLogout = () => {
-    localStorage.removeItem('token');
-    setIsAuthenticated(false);
-    setTasks([]);
-  };
-
-  const handleAddTask = async (task) => {
-    try {
-      // For demo purposes, just add to the local state
-      const newTask = {
-        id: Date.now(),
-        ...task,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-      
-      setTasks([...tasks, newTask]);
-      setErrorMessage('');
-    } catch (error) {
-      console.error('Error adding task:', error);
-      setErrorMessage('Failed to add task. Please try again.');
-    }
-  };
-
-  const handleUpdateTask = async (id, updatedTask) => {
-    try {
-      // For demo purposes, just update the local state
-      setTasks(tasks.map((task) => 
-        task.id === id 
-          ? { ...task, ...updatedTask, updatedAt: new Date().toISOString() } 
-          : task
-      ));
-      setErrorMessage('');
-    } catch (error) {
-      console.error('Error updating task:', error);
-      setErrorMessage('Failed to update task. Please try again.');
-    }
-  };
-
-  const handleDeleteTask = async (id) => {
-    try {
-      // For demo purposes, just update the local state
-      setTasks(tasks.filter((task) => task.id !== id));
-      setErrorMessage('');
-    } catch (error) {
-      console.error('Error deleting task:', error);
-      setErrorMessage('Failed to delete task. Please try again.');
-    }
-  };
-
   return (
-    <div className="App">
-      <Header isAuthenticated={isAuthenticated} onLogout={handleLogout} />
-      <main className="container">
-        {errorMessage && (
-          <div className="error-message">{errorMessage}</div>
-        )}
-        
-        {!isAuthenticated ? (
-          <LoginForm onLogin={handleLogin} />
-        ) : (
-          <>
-            <TaskForm onAddTask={handleAddTask} />
-            {isLoading ? (
-              <p>Loading tasks...</p>
-            ) : (
-              <TaskList
-                tasks={tasks}
-                onUpdateTask={handleUpdateTask}
-                onDeleteTask={handleDeleteTask}
-              />
-            )}
-          </>
-        )}
-      </main>
+    <div>
+      <Navigation />
+      <div className="container" style={{padding: '16px'}}>
+        <Routes>
+          <Route path="/" element={<Home />} />
+          <Route path="/postgres" element={<PostgresData />} />
+          <Route path="/redis" element={<RedisData />} />
+        </Routes>
+      </div>
     </div>
   );
 }
