@@ -1,16 +1,19 @@
 import React, { useState } from 'react';
 
 function LoginForm({ onLogin }) {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [email, setEmail] = useState('demo@example.com');
+  const [password, setPassword] = useState('password123');
 
   const handleSubmit = (e) => {
     e.preventDefault();
+    console.log('Login submitted with:', email, password);
     onLogin({ email, password });
   };
 
-  // For demo purposes - quick login
-  const handleDemoLogin = () => {
+  const handleDemoLogin = (e) => {
+    e.preventDefault();
+    console.log('Demo login clicked');
+    // Use default values already set in state
     onLogin({ email: 'demo@example.com', password: 'password123' });
   };
 
@@ -38,14 +41,15 @@ function LoginForm({ onLogin }) {
             required
           />
         </div>
-        <button type="submit">Login</button>
-        <button type="button" onClick={handleDemoLogin} className="demo-button">
-          Quick Demo Login
-        </button>
+        <div className="form-actions">
+          <button type="submit" className="login-button">Login</button>
+          <button type="button" onClick={handleDemoLogin} className="demo-button">
+            Quick Demo Login
+          </button>
+        </div>
       </form>
       <p className="login-hint">
-        <strong>For demo:</strong> Click "Quick Demo Login" to login with demo credentials. 
-        Or register a new account.
+        <strong>For demo:</strong> Click "Quick Demo Login" to login with demo credentials.
       </p>
     </div>
   );
