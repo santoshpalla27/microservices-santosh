@@ -8,7 +8,7 @@ services:
     depends_on:
       - backend
     environment:
-      - REACT_APP_API_URL=http://54.242.224.215:5000/api
+      - REACT_APP_API_URL=http://54.166.163.243:5000/api
     volumes:
       - ./frontend:/app
       - /app/node_modules
