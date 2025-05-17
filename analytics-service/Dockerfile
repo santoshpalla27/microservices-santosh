@@ -3,10 +3,8 @@ FROM golang:1.20-alpine
 WORKDIR /app
 
 # Copy source code
-COPY . .
-
-# Initialize Go modules and download dependencies
-RUN go mod tidy
+COPY main.go .
+COPY go.mod .
 
 # Build the application
 RUN go build -o main .
