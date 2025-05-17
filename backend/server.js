@@ -8,8 +8,14 @@ dotenv.config();
 
 const app = express();
 
+// Configure CORS to accept requests from any origin
+app.use(cors({
+  origin: '*',
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
+
 // Middleware
-app.use(cors());
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
@@ -46,6 +52,9 @@ const initializeApp = async () => {
     console.log('Server will continue running with limited functionality');
   }
 };
+
+// Start the application with proper initialization
+initializeApp();
 
 // Start the application with proper initialization
 initializeApp();
