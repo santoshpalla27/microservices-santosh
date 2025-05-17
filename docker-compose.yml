@@ -8,7 +8,7 @@ services:
     depends_on:
       - backend
     environment:
-      - REACT_APP_API_URL=http://34.227.102.186:5000
+      - REACT_APP_API_URL=http://localhost:5000
       - USE_TAILWIND=false
     volumes:
       - ./frontend:/app
@@ -71,6 +71,8 @@ services:
     image: bitnami/redis-cluster:latest
     environment:
       - REDIS_PASSWORD=redis_password
+      - REDIS_NODES=redis-node-0 redis-node-1 redis-node-2 redis-node-3 redis-node-4 redis-node-5
+      - ALLOW_EMPTY_PASSWORD=no
     ports:
       - "7000:6379"
     volumes:
@@ -82,6 +84,8 @@ services:
     image: bitnami/redis-cluster:latest
     environment:
       - REDIS_PASSWORD=redis_password
+      - REDIS_NODES=redis-node-0 redis-node-1 redis-node-2 redis-node-3 redis-node-4 redis-node-5
+      - ALLOW_EMPTY_PASSWORD=no
     ports:
       - "7001:6379"
     volumes:
@@ -93,6 +97,8 @@ services:
     image: bitnami/redis-cluster:latest
     environment:
       - REDIS_PASSWORD=redis_password
+      - REDIS_NODES=redis-node-0 redis-node-1 redis-node-2 redis-node-3 redis-node-4 redis-node-5
+      - ALLOW_EMPTY_PASSWORD=no
     ports:
       - "7002:6379"
     volumes:
@@ -104,6 +110,8 @@ services:
     image: bitnami/redis-cluster:latest
     environment:
       - REDIS_PASSWORD=redis_password
+      - REDIS_NODES=redis-node-0 redis-node-1 redis-node-2 redis-node-3 redis-node-4 redis-node-5
+      - ALLOW_EMPTY_PASSWORD=no
     ports:
       - "7003:6379"
     volumes:
@@ -115,6 +123,8 @@ services:
     image: bitnami/redis-cluster:latest
     environment:
       - REDIS_PASSWORD=redis_password
+      - REDIS_NODES=redis-node-0 redis-node-1 redis-node-2 redis-node-3 redis-node-4 redis-node-5
+      - ALLOW_EMPTY_PASSWORD=no
     ports:
       - "7004:6379"
     volumes:
@@ -126,6 +136,8 @@ services:
     image: bitnami/redis-cluster:latest
     environment:
       - REDIS_PASSWORD=redis_password
+      - REDIS_NODES=redis-node-0 redis-node-1 redis-node-2 redis-node-3 redis-node-4 redis-node-5
+      - ALLOW_EMPTY_PASSWORD=no
     ports:
       - "7005:6379"
     volumes:
@@ -143,10 +155,11 @@ services:
       - redis-node-4
       - redis-node-5
     environment:
-      - REDIS_CLUSTER_CREATOR=yes
-      - REDIS_CLUSTER_REPLICAS=1
-      - REDIS_NODES=redis-node-0 redis-node-1 redis-node-2 redis-node-3 redis-node-4 redis-node-5
       - REDIS_PASSWORD=redis_password
+      - REDIS_NODES=redis-node-0 redis-node-1 redis-node-2 redis-node-3 redis-node-4 redis-node-5
+      - REDIS_CLUSTER_REPLICAS=1
+      - REDIS_CLUSTER_CREATOR=yes
+      - ALLOW_EMPTY_PASSWORD=no
     networks:
       - redis-network
       
