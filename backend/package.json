@@ -1,7 +1,7 @@
 {
   "name": "data-flow-backend",
   "version": "1.0.0",
-  "description": "Backend for Data Flow Application",
+  "description": "Backend for Data Flow Application with Redis",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
