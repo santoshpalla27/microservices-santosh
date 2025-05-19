@@ -42,25 +42,28 @@ const redisClient = redis.createCluster({
   }
 });
 
-// Initialize Redis connection
-(async () => {
-  await redisClient.connect();
-  console.log('Connected to Redis Cluster!');
-})().catch(err => {
-  console.error('Redis connection error:', err);
-});
+// Flag to track if Redis is connected
+let redisConnected = false;
+
+// Initialize Redis connection - we'll only try to connect once
+const initRedis = async () => {
+  if (!redisConnected) {
+    try {
+      await redisClient.connect();
+      redisConnected = true;
+      console.log('Connected to Redis Cluster!');
+    } catch (err) {
+      console.error('Redis connection error:', err);
+    }
+  }
+};
 
 // Test database connections on startup
 app.listen(PORT, async () => {
   console.log(`Server running on port ${PORT}`);
   
-  // Connect to Redis first
-  try {
-    await redisClient.connect();
-    console.log('Connected to Redis Cluster!');
-  } catch (err) {
-    console.error('Redis connection error:', err);
-  }
+  // Connect to Redis
+  await initRedis();
   
   // Then connect to MySQL with retries
   let mysqlConnected = false;
@@ -94,7 +97,11 @@ app.listen(PORT, async () => {
 function setupRoutes() {
   // Health check route
   app.get('/api/health', (req, res) => {
-    res.json({ status: 'healthy', mysql: 'connected', redis: redisClient.isOpen ? 'connected' : 'disconnected' });
+    res.json({ 
+      status: 'healthy', 
+      mysql: 'connected', 
+      redis: redisConnected ? 'connected' : 'disconnected' 
+    });
   });
 
   // Get all users from MySQL
@@ -205,11 +212,32 @@ function setupRoutes() {
 
   // Redis Routes
   
+  // Helper function to scan Redis keys with pattern
+  async function scanKeys(pattern) {
+    // In Redis Cluster, we need to use SCAN on each node
+    const keys = [];
+    try {
+      // Create a SCAN iterator that works with redis cluster
+      // We're using a simple approach that returns all keys with the pattern
+      // This is a simplified implementation and may not be efficient for large datasets
+      const nodesKeys = await redisClient.sendCommand(['KEYS', pattern]);
+      keys.push(...nodesKeys);
+      return keys;
+    } catch (err) {
+      console.error('Error scanning Redis keys:', err);
+      return [];
+    }
+  }
+
   // Get all users from Redis
   app.get('/api/redis/users', async (req, res) => {
+    if (!redisConnected) {
+      return res.status(503).json({ error: 'Redis connection not available' });
+    }
+    
     try {
-      // Get all user keys
-      const keys = await redisClient.keys('user:*');
+      // Get all user keys using KEYS pattern (in production, use SCAN)
+      const keys = await scanKeys('user:*');
       
       if (keys.length === 0) {
         return res.json([]);
@@ -236,6 +264,10 @@ function setupRoutes() {
 
   // Get a user from Redis by ID
   app.get('/api/redis/users/:id', async (req, res) => {
+    if (!redisConnected) {
+      return res.status(503).json({ error: 'Redis connection not available' });
+    }
+    
     try {
       const userData = await redisClient.hGetAll(`user:${req.params.id}`);
       
@@ -255,6 +287,10 @@ function setupRoutes() {
 
   // Create a user in Redis
   app.post('/api/redis/users', async (req, res) => {
+    if (!redisConnected) {
+      return res.status(503).json({ error: 'Redis connection not available' });
+    }
+    
     const { name, email, phone, address } = req.body;
     
     if (!name || !email) {
@@ -263,7 +299,7 @@ function setupRoutes() {
     
     try {
       // Check if email exists
-      const keys = await redisClient.keys('user:*');
+      const keys = await scanKeys('user:*');
       
       for (const key of keys) {
         const userData = await redisClient.hGetAll(key);
@@ -296,6 +332,10 @@ function setupRoutes() {
 
   // Update a user in Redis
   app.put('/api/redis/users/:id', async (req, res) => {
+    if (!redisConnected) {
+      return res.status(503).json({ error: 'Redis connection not available' });
+    }
+    
     const { name, email, phone, address } = req.body;
     const userId = req.params.id;
     
@@ -312,7 +352,7 @@ function setupRoutes() {
       }
       
       // Check if email is already used by another user
-      const keys = await redisClient.keys('user:*');
+      const keys = await scanKeys('user:*');
       
       for (const key of keys) {
         if (key !== `user:${userId}`) {
@@ -344,6 +384,10 @@ function setupRoutes() {
 
   // Delete a user from Redis
   app.delete('/api/redis/users/:id', async (req, res) => {
+    if (!redisConnected) {
+      return res.status(503).json({ error: 'Redis connection not available' });
+    }
+    
     try {
       const exists = await redisClient.exists(`user:${req.params.id}`);
       
@@ -362,6 +406,10 @@ function setupRoutes() {
 
   // Copy user data from MySQL to Redis
   app.post('/api/mysql-to-redis', async (req, res) => {
+    if (!redisConnected) {
+      return res.status(503).json({ error: 'Redis connection not available' });
+    }
+    
     try {
       // Get all users from MySQL
       const [rows] = await mysqlPool.query('SELECT * FROM users');
@@ -388,9 +436,13 @@ function setupRoutes() {
 
   // Copy user data from Redis to MySQL
   app.post('/api/redis-to-mysql', async (req, res) => {
+    if (!redisConnected) {
+      return res.status(503).json({ error: 'Redis connection not available' });
+    }
+    
     try {
       // Get all users from Redis
-      const keys = await redisClient.keys('user:*');
+      const keys = await scanKeys('user:*');
       let copiedCount = 0;
       
       for (const key of keys) {
@@ -419,6 +471,42 @@ function setupRoutes() {
 }
 
 // Graceful shutdown
+process.on('SIGINT', async () => {
+  console.log('Shutting down server...');
+  
+  try {
+    if (redisConnected) {
+      await redisClient.quit();
+      console.log('Redis client disconnected');
+    }
+    
+    await mysqlPool.end();
+    console.log('MySQL pool closed');
+    
+    process.exit(0);
+  } catch (err) {
+    console.error('Error during shutdown:', err);
+    process.exit(1);
+  }
+});
+process.on('SIGINT', async () => {
+  console.log('Shutting down server...');
+  
+  try {
+    if (redisConnected) {
+      await redisClient.quit();
+      console.log('Redis client disconnected');
+    }
+    
+    await mysqlPool.end();
+    console.log('MySQL pool closed');
+    
+    process.exit(0);
+  } catch (err) {
+    console.error('Error during shutdown:', err);
+    process.exit(1);
+  }
+});
 process.on('SIGINT', async () => {
   console.log('Shutting down server...');
   
