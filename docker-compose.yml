@@ -9,6 +9,8 @@ services:
       - backend
     environment:
       - REACT_APP_API_URL=http://3.88.55.218:5000/api
+    networks:
+      - app
 
   backend:
     build: ./backend
@@ -31,6 +33,10 @@ services:
       - REDIS_PASSWORD=password
       - PORT=5000
 
+    networks:
+      - redis-cluster
+      - app
+
   mysql:
     image: mysql:8.0
     ports:
@@ -41,7 +47,8 @@ services:
     volumes:
       - mysql_data:/var/lib/mysql
       - ./init/init.sql:/docker-entrypoint-initdb.d/init.sql
-
+    networks:
+      - app
 
   redis-node-0:
     image: bitnami/redis-cluster:latest
