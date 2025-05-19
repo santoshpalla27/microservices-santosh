@@ -54,16 +54,39 @@ const redisClient = redis.createCluster({
 app.listen(PORT, async () => {
   console.log(`Server running on port ${PORT}`);
   
+  // Connect to Redis first
   try {
-    // Test MySQL
-    const connection = await mysqlPool.getConnection();
-    console.log('Connected to MySQL database!');
-    connection.release();
-    
-    // Add routes after successful connection
-    setupRoutes();
+    await redisClient.connect();
+    console.log('Connected to Redis Cluster!');
   } catch (err) {
-    console.error('Error connecting to MySQL:', err);
+    console.error('Redis connection error:', err);
+  }
+  
+  // Then connect to MySQL with retries
+  let mysqlConnected = false;
+  let retries = 10;
+  
+  while (!mysqlConnected && retries > 0) {
+    try {
+      const connection = await mysqlPool.getConnection();
+      console.log('Connected to MySQL database!');
+      connection.release();
+      mysqlConnected = true;
+      
+      // Add routes after successful connection
+      setupRoutes();
+    } catch (err) {
+      console.error(`Error connecting to MySQL (${retries} retries left):`, err);
+      retries -= 1;
+      // Wait 5 seconds before retrying
+      await new Promise(resolve => setTimeout(resolve, 5000));
+    }
+  }
+  
+  if (!mysqlConnected) {
+    console.error('Failed to connect to MySQL after multiple attempts');
+    // Still set up routes so Redis operations can work
+    setupRoutes();
   }
 });
 
