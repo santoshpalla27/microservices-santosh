@@ -1,48 +1,6 @@
 version: '3.8'
 
 services:
-  frontend:
-    build: ./frontend
-    ports:
-      - "3000:3000"
-    depends_on:
-      - backend
-    environment:
-      - REACT_APP_API_URL=http://184.73.142.47:5000/api
-
-  backend:
-    build: ./backend
-    ports:
-      - "5000:5000"
-    depends_on:
-      - mysql
-      - redis-node-0
-      - redis-node-1
-      - redis-node-2
-      - redis-node-3
-      - redis-node-4
-      - redis-node-5
-    environment:
-      - DB_HOST=mysql
-      - DB_USER=root
-      - DB_PASSWORD=password
-      - DB_NAME=userdb
-      - REDIS_NODES=redis-node-0:6379,redis-node-1:6379,redis-node-2:6379,redis-node-3:6379,redis-node-4:6379,redis-node-5:6379
-      - REDIS_PASSWORD=password
-      - PORT=5000
-
-  mysql:
-    image: mysql:8.0
-    ports:
-      - "3306:3306"
-    environment:
-      - MYSQL_ROOT_PASSWORD=password
-      - MYSQL_DATABASE=userdb
-    volumes:
-      - mysql_data:/var/lib/mysql
-      - ./init/init.sql:/docker-entrypoint-initdb.d/init.sql
-
-
   redis-node-0:
     image: bitnami/redis-cluster:latest
     container_name: redis-node-0
@@ -167,11 +125,8 @@ services:
 networks:
   redis-cluster:
     driver: bridge
-  app:
-    driver: bridge
 
 volumes:
-  mysql_data:
   redis-data-0:
   redis-data-1:
   redis-data-2:
