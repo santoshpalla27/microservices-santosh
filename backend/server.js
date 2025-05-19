@@ -11,10 +11,11 @@ const PORT = process.env.PORT || 5000;
 
 // Middleware
 app.use(cors({
-  origin: 'http://localhost:3000',
+  origin: true, // Allow any origin
   credentials: true
 }));
 app.use(express.json());
+
 
 // MySQL Connection Pool
 const mysqlPool = mysql.createPool({
