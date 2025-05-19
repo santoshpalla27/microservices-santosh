@@ -101,26 +101,29 @@ services:
       - redis-node-3
       - redis-node-4
       - redis-node-5
-    entrypoint: ["/bin/bash", "-c"]
-    command: |
-      "
-      echo '🔄 Waiting for Redis nodes...';
-      for i in {1..20}; do
-        if redis-cli -a bitnami123 -h redis-node-0 ping | grep -q PONG; then
-          break;
-        fi;
-        sleep 2;
-      done;
-      echo '🚀 Creating Redis Cluster...';
-      yes yes | redis-cli --cluster create \
-        redis-node-0:6379 redis-node-1:6379 redis-node-2:6379 \
-        redis-node-3:6379 redis-node-4:6379 redis-node-5:6379 \
-        --cluster-replicas 1 -a bitnami123;
-      echo '✅ Cluster created.';
-      "
     networks:
       - redis-cluster
     restart: "no"
+    command: >
+      bash -c '
+        echo "🔄 Waiting for Redis nodes to be ready..."
+        sleep 10
+        for NODE in redis-node-0 redis-node-1 redis-node-2 redis-node-3 redis-node-4 redis-node-5; do
+          until redis-cli -h $${NODE} -a bitnami123 ping | grep -q PONG; do
+            echo "Waiting for $${NODE}..."
+            sleep 2
+          done
+          echo "$${NODE} is ready!"
+        done
+        
+        echo "🚀 Creating Redis Cluster..."
+        echo "yes" | redis-cli --cluster create \
+          redis-node-0:6379 redis-node-1:6379 redis-node-2:6379 \
+          redis-node-3:6379 redis-node-4:6379 redis-node-5:6379 \
+          --cluster-replicas 1 -a bitnami123
+        
+        echo "✅ Cluster initialization completed."
+      '
 
 networks:
   redis-cluster:

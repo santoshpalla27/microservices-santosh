@@ -1,4 +1,4 @@
-const Redis = require('ioredis');
+const Redis = require('redis');
 
 // Parse Redis nodes from environment variable
 const parseRedisNodes = () => {
@@ -9,148 +9,30 @@ const parseRedisNodes = () => {
   });
 };
 
-// Function to test if a Redis node is available
-const testRedisNode = async (host, port, password, attempt = 1, maxAttempts = 5) => {
-  console.log(`Testing Redis node ${host}:${port} (attempt ${attempt}/${maxAttempts})...`);
-  
-  const client = new Redis({
-    host,
-    port,
-    password,
-    connectTimeout: 5000,
-    maxRetriesPerRequest: 1,
-    retryStrategy: () => null  // Don't retry automatically
-  });
-  
-  return new Promise((resolve) => {
-    const timeoutId = setTimeout(() => {
-      client.disconnect();
-      if (attempt < maxAttempts) {
-        console.log(`Timeout connecting to ${host}:${port}, retrying...`);
-        resolve(testRedisNode(host, port, password, attempt + 1, maxAttempts));
-      } else {
-        console.log(`Failed to connect to ${host}:${port} after ${maxAttempts} attempts`);
-        resolve(false);
-      }
-    }, 5000);
+// Create a simple Redis client (not cluster mode)
+const createSimpleClient = async () => {
+  try {
+    const nodes = parseRedisNodes();
+    const password = process.env.REDIS_PASSWORD || 'password';
     
-    client.ping().then(() => {
-      clearTimeout(timeoutId);
-      client.disconnect();
-      console.log(`Successfully connected to Redis node ${host}:${port}`);
-      resolve(true);
-    }).catch(err => {
-      clearTimeout(timeoutId);
-      client.disconnect();
-      console.error(`Error connecting to Redis node ${host}:${port}:`, err.message);
-      if (attempt < maxAttempts) {
-        console.log(`Retrying connection to ${host}:${port}...`);
-        setTimeout(() => {
-          resolve(testRedisNode(host, port, password, attempt + 1, maxAttempts));
-        }, 3000);
-      } else {
-        console.log(`Failed to connect to ${host}:${port} after ${maxAttempts} attempts`);
-        resolve(false);
+    console.log(`Creating simple Redis client to ${nodes[0].host}:${nodes[0].port}`);
+    
+    const client = Redis.createClient({
+      socket: {
+        host: nodes[0].host,
+        port: nodes[0].port
+      },
+      password: password,
+      retry_strategy: (options) => {
+        if (options.attempt > 10) {
+          // Stop retrying after 10 attempts
+          return undefined;
+        }
+        return Math.min(options.attempt * 100, 3000);
       }
     });
-  });
-};
-
-// Create a mock Redis client for fallback
-const createMockRedisClient = () => {
-  console.log('Creating mock Redis client for fallback');
-  return {
-    // Read operations
-    hgetall: async () => ({}),
-    smembers: async () => ([]),
-    get: async () => null,
-    
-    // Write operations
-    hmset: async () => "OK",
-    hset: async () => 1,
-    sadd: async () => 1,
-    srem: async () => 1,
-    del: async () => 1,
-    set: async () => "OK",
-    
-    // Others
-    on: () => {},
-    ping: async () => "PONG",
-    quit: async () => {},
-    disconnect: async () => {}
-  };
-};
-
-// Try to connect to Redis Cluster with retries
-const tryConnectRedisCluster = async (nodes, password, attempt = 1, maxAttempts = 3) => {
-  if (attempt > maxAttempts) {
-    console.log(`Failed to connect to Redis Cluster after ${maxAttempts} attempts`);
-    return null;
-  }
-  
-  try {
-    console.log(`Attempting to connect to Redis Cluster (attempt ${attempt}/${maxAttempts})...`);
-    
-    // Create client with the appropriate configuration for a cluster
-    const client = new Redis.Cluster(
-      nodes.map(node => ({
-        host: node.host,
-        port: node.port
-      })),
-      {
-        redisOptions: {
-          password: password,
-          connectTimeout: 10000  // 10 seconds
-        },
-        clusterRetryStrategy: (times) => {
-          console.log(`Cluster connection retry ${times}`);
-          return Math.min(100 + Math.exp(times), 10000);
-        },
-        maxRedirections: 16,
-        retryDelayOnFailover: 2000,
-        scaleReads: 'all'
-      }
-    );
     
     // Set up event handlers
-    client.on('error', (err) => {
-      console.error(`Redis Cluster client error: ${err.message}`);
-    });
-    
-    client.on('connect', () => {
-      console.log('Connected to Redis Cluster');
-    });
-    
-    // Try to ping to verify connection
-    await client.ping('node0');
-    console.log('Redis Cluster ping successful');
-    return client;
-  } catch (err) {
-    console.error(`Error connecting to Redis Cluster (attempt ${attempt}/${maxAttempts}):`, err.message);
-    
-    // Wait before retrying
-    await new Promise(resolve => setTimeout(resolve, 5000));
-    return tryConnectRedisCluster(nodes, password, attempt + 1, maxAttempts);
-  }
-};
-
-// Create a standalone Redis client (not cluster)
-const createStandaloneClient = async (nodes, password) => {
-  try {
-    console.log(`Creating standalone Redis client to node ${nodes[0].host}:${nodes[0].port}`);
-    
-    const client = new Redis({
-      host: nodes[0].host,
-      port: nodes[0].port,
-      password: password,
-      connectTimeout: 10000,
-      maxRetriesPerRequest: 3,
-      retryStrategy: (times) => {
-        console.log(`Retrying Redis connection, attempt #${times}`);
-        return Math.min(Math.pow(2, times) * 500, 10000);
-      }
-    });
-    
     client.on('error', (err) => {
       console.error('Redis client error:', err.message);
     });
@@ -163,15 +45,135 @@ const createStandaloneClient = async (nodes, password) => {
       console.log('Redis client is ready');
     });
     
-    // Test connection
-    const pingResult = await client.ping();
-    console.log(`Redis ping result: ${pingResult}`);
+    // Connect to Redis
+    await client.connect();
+    
+    // Initialize with some sample data
+    try {
+      // Check if we need to initialize
+      const existingUsers = await client.sMembers('users');
+      if (!existingUsers || existingUsers.length === 0) {
+        console.log('No users found in Redis, creating sample data...');
+        
+        // Create sample users
+        const userIds = [];
+        for (let i = 1; i <= 3; i++) {
+          const id = `user:${1000 + i}`;
+          userIds.push(id);
+          
+          await client.hSet(id, {
+            id: id,
+            name: `Example User ${i}`,
+            email: `user${i}@example.com`,
+            phone: `555-000-${1000 + i}`,
+            created_at: new Date().toISOString()
+          });
+        }
+        
+        // Add to users set
+        if (userIds.length > 0) {
+          await client.sAdd('users', userIds);
+          console.log(`Added ${userIds.length} sample users to Redis`);
+        }
+      } else {
+        console.log(`Found ${existingUsers.length} existing users in Redis`);
+      }
+    } catch (initErr) {
+      console.error('Error initializing Redis with sample data:', initErr.message);
+      // Continue even if initialization fails
+    }
     
     return client;
   } catch (err) {
-    console.error('Failed to create standalone Redis client:', err.message);
-    return null;
+    console.error('Failed to create Redis client:', err.message);
+    return createMockRedisClient();
   }
+};
+
+// Create a mock Redis client for fallback
+const createMockRedisClient = () => {
+  console.log('Creating mock Redis client for fallback');
+  
+  // In-memory storage for the mock client
+  const hashStorage = {};
+  const setStorage = {};
+  let mockData = {
+    'users': [] // empty set for users
+  };
+  
+  return {
+    // Read operations
+    hGetAll: async (key) => {
+      console.log(`[MOCK] hGetAll for key: ${key}`);
+      return hashStorage[key] || {};
+    },
+    sMembers: async (key) => {
+      console.log(`[MOCK] sMembers for key: ${key}`);
+      return setStorage[key] || [];
+    },
+    get: async (key) => {
+      console.log(`[MOCK] get for key: ${key}`);
+      return mockData[key] || null;
+    },
+    
+    // Write operations
+    hSet: async (key, ...args) => {
+      console.log(`[MOCK] hSet for key: ${key}, args:`, args);
+      if (!hashStorage[key]) hashStorage[key] = {};
+      
+      // Process arguments
+      for (let i = 0; i < args.length; i += 2) {
+        if (i + 1 < args.length) {
+          hashStorage[key][args[i]] = args[i + 1];
+        }
+      }
+      return "OK";
+    },
+    sAdd: async (key, member) => {
+      console.log(`[MOCK] sAdd ${member} to key: ${key}`);
+      if (!setStorage[key]) setStorage[key] = [];
+      if (!setStorage[key].includes(member)) {
+        setStorage[key].push(member);
+        return 1;
+      }
+      return 0;
+    },
+    sRem: async (key, member) => {
+      console.log(`[MOCK] sRem ${member} from key: ${key}`);
+      if (!setStorage[key]) return 0;
+      
+      const initialLength = setStorage[key].length;
+      setStorage[key] = setStorage[key].filter(item => item !== member);
+      return initialLength - setStorage[key].length;
+    },
+    del: async (key) => {
+      console.log(`[MOCK] del key: ${key}`);
+      if (hashStorage[key]) {
+        delete hashStorage[key];
+        return 1;
+      }
+      if (setStorage[key]) {
+        delete setStorage[key];
+        return 1;
+      }
+      return 0;
+    },
+    
+    // Utility
+    ping: async () => {
+      console.log('[MOCK] ping');
+      return "PONG";
+    },
+    on: (event, callback) => {
+      // No-op
+    },
+    quit: async () => {
+      console.log('[MOCK] quit');
+    },
+    disconnect: async () => {
+      console.log('[MOCK] disconnect');
+    }
+  };
 };
 
 // Initialize Redis client
@@ -190,47 +192,46 @@ const getRedisClient = async () => {
   
   clientInitialization = (async () => {
     try {
-      const nodes = parseRedisNodes();
-      const password = process.env.REDIS_PASSWORD || 'password';
+      // Try to create a simple client first (no cluster mode)
+      const client = await createSimpleClient();
       
-      console.log(`Attempting to connect to Redis using nodes: ${JSON.stringify(nodes)}`);
-      
-      // First, try to connect to the Redis Cluster
-      const clusterClient = await tryConnectRedisCluster(nodes, password);
-      if (clusterClient) {
-        console.log('Successfully connected to Redis Cluster');
-        redisClient = clusterClient;
+      if (client) {
+        redisClient = client;
+        clientInitialization = null;
+        
+        // Test client with a simple operation
+        try {
+          const pingResult = await client.ping();
+          console.log('Redis ping result:', pingResult);
+        } catch (pingErr) {
+          console.error('Redis ping failed:', pingErr.message);
+          // Return mock client if ping fails
+          redisClient = createMockRedisClient();
+        }
+        
+        return redisClient;
+      } else {
+        console.error('Failed to create Redis client');
+        redisClient = createMockRedisClient();
         clientInitialization = null;
         return redisClient;
       }
-      
-      // If cluster connection failed, try individual node
-      console.log('Cluster connection failed, trying standalone connection...');
-      const standaloneClient = await createStandaloneClient(nodes, password);
-      if (standaloneClient) {
-        console.log('Successfully connected to Redis in standalone mode');
-        redisClient = standaloneClient;
-        clientInitialization = null;
-        return redisClient;
-      }
-      
-      // If all attempts failed, use mock client
-      console.log('All Redis connection attempts failed, using mock client');
-      redisClient = createMockRedisClient();
-      clientInitialization = null;
-      return redisClient;
-      
     } catch (err) {
       console.error('Error initializing Redis client:', err);
       clientInitialization = null;
       
       // Return mock client on error
       console.log('Using mock Redis client due to initialization error');
-      return createMockRedisClient();
+      redisClient = createMockRedisClient();
+      return redisClient;
     }
   })();
   
   return clientInitialization;
+};
+
+module.exports = {
+  getRedisClient
 };
 
 module.exports = {

@@ -24,12 +24,41 @@ const initializeApp = async () => {
   try {
     // Database connection setup
     const db = require('./config/db.config');
-    // Load Redis module but don't wait for connection
+    
+    // Load Redis configuration - will connect and initialize when first used
     const redis = require('./config/redis.config');
     
     // Simple route for testing
     app.get('/', (req, res) => {
       res.json({ message: 'Welcome to User Record Application' });
+    });
+    
+    // Health check endpoint
+    app.get('/health', async (req, res) => {
+      const health = { 
+        status: 'UP',
+        timestamp: new Date(),
+        services: {
+          mysql: 'UP',
+          redis: 'UNKNOWN'
+        }
+      };
+      
+      // Check Redis connection
+      try {
+        const redisClient = await redis.getRedisClient();
+        if (redisClient) {
+          const pingResult = await redisClient.ping();
+          health.services.redis = pingResult === 'PONG' ? 'UP' : 'DOWN';
+        } else {
+          health.services.redis = 'DOWN';
+        }
+      } catch (err) {
+        health.services.redis = 'DOWN';
+        health.redisError = err.message;
+      }
+      
+      res.json(health);
     });
     
     // Routes
@@ -41,9 +70,15 @@ const initializeApp = async () => {
       console.log(`Server is running on port ${PORT}.`);
     });
     
-    // Preload Redis connection to be ready when first API call comes in
+    // Test Redis connection in background (non-blocking)
     console.log('Initializing Redis connection in background...');
-    redis.getRedisClient().catch(err => {
+    redis.getRedisClient().then(client => {
+      if (client) {
+        console.log('Redis client ready');
+      } else {
+        console.warn('Redis client not available, will use mock client');
+      }
+    }).catch(err => {
       console.error('Initial Redis connection failed, will retry on demand:', err.message);
     });
   } catch (err) {

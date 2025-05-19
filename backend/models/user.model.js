@@ -32,18 +32,17 @@ const User = {
       
       console.log(`Creating user in Redis with ID: ${id}`);
       
-      // Store user as hash in Redis using hmset with field-value pairs
-      await client.hmset(
-        id,
-        'id', id,
-        'name', user.name,
-        'email', user.email,
-        'phone', user.phone || '',
-        'created_at', new Date().toISOString()
-      );
+      // Store user as hash in Redis using hSet
+      await client.hSet(id, {
+        id: id,
+        name: user.name,
+        email: user.email,
+        phone: user.phone || '',
+        created_at: new Date().toISOString()
+      });
       
       // Add to users set for listing
-      await client.sadd('users', id);
+      await client.sAdd('users', id);
       
       console.log(`Successfully created user in Redis: ${id}`);
       
@@ -74,39 +73,55 @@ const User = {
   // Find all users from Redis
   findAllFromRedis: async () => {
     try {
+      console.log('Finding all users from Redis...');
+      
       const client = await getRedisClient();
       if (!client) {
         console.error("Redis client not available");
         return [];
       }
       
+      console.log('Redis client obtained, attempting to get user IDs...');
+      
       // Get all user IDs from the set
       let userIds;
       try {
-        userIds = await client.smembers('users');
-        console.log(`Found ${userIds.length} user IDs in Redis set`);
+        userIds = await client.sMembers('users');
+        console.log(`Found ${userIds.length} user IDs in Redis set:`, userIds);
       } catch (err) {
         console.error("Error getting members from Redis:", err);
         return [];
       }
       
+      if (!userIds || userIds.length === 0) {
+        console.log('No user IDs found in Redis');
+        return [];
+      }
+      
       // Get all user data
+      console.log('Fetching user data for each ID...');
       const users = [];
       for (const id of userIds) {
         try {
-          const userData = await client.hgetall(id);
+          console.log(`Fetching data for user ${id}...`);
+          const userData = await client.hGetAll(id);
+          console.log(`User data for ${id}:`, userData);
+          
           if (userData && Object.keys(userData).length > 0) {
             users.push(userData);
+          } else {
+            console.log(`No data found for user ${id}`);
           }
         } catch (err) {
           console.error(`Error getting user data for ${id}:`, err);
         }
       }
       
+      console.log(`Successfully retrieved ${users.length} users from Redis`);
       return users;
     } catch (err) {
       console.error("Error in findAllFromRedis:", err);
-      return [];
+      throw err;
     }
   },
   

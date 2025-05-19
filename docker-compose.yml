@@ -8,9 +8,9 @@ services:
     depends_on:
       - backend
     environment:
-      - REACT_APP_API_URL=http://3.88.55.218:5000/api
+      - REACT_APP_API_URL=http://localhost:5000/api  # Change IP if needed
     networks:
-      - app
+      - app_net
 
   backend:
     build: ./backend
@@ -30,12 +30,10 @@ services:
       - DB_PASSWORD=password
       - DB_NAME=userdb
       - REDIS_NODES=redis-node-0:6379,redis-node-1:6379,redis-node-2:6379,redis-node-3:6379,redis-node-4:6379,redis-node-5:6379
-      - REDIS_PASSWORD=password
+      - REDIS_PASSWORD=bitnami123
       - PORT=5000
-
     networks:
-      - redis-cluster
-      - app
+      - app_net
 
   mysql:
     image: mysql:8.0
@@ -48,7 +46,7 @@ services:
       - mysql_data:/var/lib/mysql
       - ./init/init.sql:/docker-entrypoint-initdb.d/init.sql
     networks:
-      - app
+      - app_net
 
   redis-node-0:
     image: bitnami/redis-cluster:latest
@@ -58,11 +56,10 @@ services:
       - REDIS_PORT_NUMBER=6379
       - REDIS_CLUSTER_ANNOUNCE_IP=redis-node-0
       - REDIS_NODES=redis-node-0:6379,redis-node-1:6379,redis-node-2:6379,redis-node-3:6379,redis-node-4:6379,redis-node-5:6379
-    
     volumes:
       - redis-data-0:/bitnami
     networks:
-      - redis-cluster
+      - app_net
     ports:
       - "7000:6379"
 
@@ -77,7 +74,7 @@ services:
     volumes:
       - redis-data-1:/bitnami
     networks:
-      - redis-cluster
+      - app_net
     ports:
       - "7001:6379"
 
@@ -92,7 +89,7 @@ services:
     volumes:
       - redis-data-2:/bitnami
     networks:
-      - redis-cluster
+      - app_net
     ports:
       - "7002:6379"
 
@@ -107,7 +104,7 @@ services:
     volumes:
       - redis-data-3:/bitnami
     networks:
-      - redis-cluster
+      - app_net
     ports:
       - "7003:6379"
 
@@ -122,7 +119,7 @@ services:
     volumes:
       - redis-data-4:/bitnami
     networks:
-      - redis-cluster
+      - app_net
     ports:
       - "7004:6379"
 
@@ -137,7 +134,7 @@ services:
     volumes:
       - redis-data-5:/bitnami
     networks:
-      - redis-cluster
+      - app_net
     ports:
       - "7005:6379"
 
@@ -150,31 +147,32 @@ services:
       - redis-node-3
       - redis-node-4
       - redis-node-5
-    entrypoint: ["/bin/bash", "-c"]
-    command: |
-      "
-      echo '🔄 Waiting for Redis nodes...';
-      for i in {1..20}; do
-        if redis-cli -a bitnami123 -h redis-node-0 ping | grep -q PONG; then
-          break;
-        fi;
-        sleep 2;
-      done;
-      echo '🚀 Creating Redis Cluster...';
-      yes yes | redis-cli --cluster create \
-        redis-node-0:6379 redis-node-1:6379 redis-node-2:6379 \
-        redis-node-3:6379 redis-node-4:6379 redis-node-5:6379 \
-        --cluster-replicas 1 -a bitnami123;
-      echo '✅ Cluster created.';
-      "
     networks:
-      - redis-cluster
+      - app_net
     restart: "no"
+    command: >
+      bash -c '
+        echo "🔄 Waiting for Redis nodes to be ready..."
+        sleep 10
+        for NODE in redis-node-0 redis-node-1 redis-node-2 redis-node-3 redis-node-4 redis-node-5; do
+          until redis-cli -h $${NODE} -a bitnami123 ping | grep -q PONG; do
+            echo "Waiting for $${NODE}..."
+            sleep 2
+          done
+          echo "$${NODE} is ready!"
+        done
+        
+        echo "🚀 Creating Redis Cluster..."
+        echo "yes" | redis-cli --cluster create \
+          redis-node-0:6379 redis-node-1:6379 redis-node-2:6379 \
+          redis-node-3:6379 redis-node-4:6379 redis-node-5:6379 \
+          --cluster-replicas 1 -a bitnami123
+        
+        echo "✅ Cluster initialization completed."
+      '
 
 networks:
-  redis-cluster:
-    driver: bridge
-  app:
+  app_net:
     driver: bridge
 
 volumes:
