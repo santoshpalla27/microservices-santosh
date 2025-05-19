@@ -1,140 +1,207 @@
-import React, { useState } from 'react';
-import { toast } from 'react-toastify';
-import api from '../services/api';
+import React, { useState, useEffect } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { fetchMySQLUser, fetchRedisUser, createMySQLUser, createRedisUser, updateMySQLUser, updateRedisUser } from '../services/apiService';
 
-const UserForm = ({ onSuccess }) => {
-  const [formData, setFormData] = useState({
+const UserForm = () => {
+  const { storage, id } = useParams();
+  const navigate = useNavigate();
+  const [selectedStorage, setSelectedStorage] = useState(storage || 'mysql');
+  const [user, setUser] = useState({
     name: '',
     email: '',
     phone: '',
-    storage: 'mysql' // Default storage option
+    address: ''
   });
-  
   const [loading, setLoading] = useState(false);
-  
+  const [error, setError] = useState(null);
+  const [success, setSuccess] = useState(false);
+  const isEditing = !!id;
+
+  useEffect(() => {
+    if (isEditing && storage && id) {
+      const fetchUser = async () => {
+        try {
+          setLoading(true);
+          const response = storage === 'mysql' 
+            ? await fetchMySQLUser(id)
+            : await fetchRedisUser(id);
+          
+          setUser(response.data);
+          setLoading(false);
+        } catch (error) {
+          console.error('Error fetching user:', error);
+          setError('Failed to load user data');
+          setLoading(false);
+        }
+      };
+      
+      fetchUser();
+    }
+  }, [isEditing, storage, id]);
+
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setFormData({
-      ...formData,
+    setUser(prevUser => ({
+      ...prevUser,
       [name]: value
-    });
+    }));
   };
-  
+
   const handleStorageChange = (e) => {
-    setFormData({
-      ...formData,
-      storage: e.target.value
-    });
+    setSelectedStorage(e.target.value);
   };
-  
+
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setError(null);
+    setSuccess(false);
     
-    if (!formData.name || !formData.email) {
-      toast.error('Name and email are required!');
+    // Simple validation
+    if (!user.name.trim() || !user.email.trim()) {
+      setError('Name and email are required');
+      return;
+    }
+    
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(user.email)) {
+      setError('Please enter a valid email address');
       return;
     }
     
     try {
       setLoading(true);
-      await api.createUser(formData);
       
-      // Reset form
-      setFormData({
-        name: '',
-        email: '',
-        phone: '',
-        storage: formData.storage // Keep the selected storage option
-      });
+      if (isEditing) {
+        // Update existing user
+        if (storage === 'mysql') {
+          await updateMySQLUser(id, user);
+        } else {
+          await updateRedisUser(id, user);
+        }
+        setSuccess('User updated successfully');
+      } else {
+        // Create new user
+        if (selectedStorage === 'mysql') {
+          await createMySQLUser(user);
+        } else {
+          await createRedisUser(user);
+        }
+        setSuccess('User created successfully');
+        // Reset form if creating new user
+        setUser({
+          name: '',
+          email: '',
+          phone: '',
+          address: ''
+        });
+      }
       
-      toast.success(`User successfully added to ${formData.storage}!`);
-      
-      // Trigger refresh in parent component
-      if (onSuccess) onSuccess();
-      
-    } catch (error) {
-      console.error('Error creating user:', error);
-      toast.error(error.response?.data?.message || 'Failed to create user. Please try again.');
-    } finally {
       setLoading(false);
+      
+      // Redirect after a short delay
+      setTimeout(() => {
+        navigate(isEditing ? `/${storage}` : `/${selectedStorage}`);
+      }, 1500);
+    } catch (error) {
+      setLoading(false);
+      if (error.response && error.response.data.error) {
+        setError(error.response.data.error);
+      } else {
+        setError('An error occurred while saving the user');
+      }
+      console.error('Error saving user:', error);
     }
   };
-  
+
+  if (loading && isEditing) {
+    return <div className="loading">Loading user data...</div>;
+  }
+
   return (
-    <div className="user-form">
-      <h2 className="form-title">Add New User</h2>
+    <div className="card">
+      <h2>{isEditing ? 'Edit User' : 'Add New User'}</h2>
+      
+      {error && <div className="alert alert-danger">{error}</div>}
+      {success && <div className="alert alert-success">{success}</div>}
       
       <form onSubmit={handleSubmit}>
+        {!isEditing && (
+          <div className="form-group storage-selector">
+            <label htmlFor="storage">Storage Type:</label>
+            <select
+              id="storage"
+              className="form-control"
+              value={selectedStorage}
+              onChange={handleStorageChange}
+            >
+              <option value="mysql">MySQL Database</option>
+              <option value="redis">Redis Cluster</option>
+            </select>
+          </div>
+        )}
+        
         <div className="form-group">
-          <label htmlFor="name">Name *</label>
+          <label htmlFor="name">Name:</label>
           <input
             type="text"
             id="name"
             name="name"
-            value={formData.name}
+            className="form-control"
+            value={user.name}
             onChange={handleChange}
-            placeholder="Enter name"
             required
           />
         </div>
         
         <div className="form-group">
-          <label htmlFor="email">Email *</label>
+          <label htmlFor="email">Email:</label>
           <input
             type="email"
             id="email"
             name="email"
-            value={formData.email}
+            className="form-control"
+            value={user.email}
             onChange={handleChange}
-            placeholder="Enter email"
             required
           />
         </div>
         
         <div className="form-group">
-          <label htmlFor="phone">Phone</label>
+          <label htmlFor="phone">Phone:</label>
           <input
             type="tel"
             id="phone"
             name="phone"
-            value={formData.phone}
+            className="form-control"
+            value={user.phone}
             onChange={handleChange}
-            placeholder="Enter phone number"
           />
         </div>
         
         <div className="form-group">
-          <label>Storage Option</label>
-          <div className="storage-options">
-            <div className="storage-option">
-              <input
-                type="radio"
-                id="mysql"
-                name="storage"
-                value="mysql"
-                checked={formData.storage === 'mysql'}
-                onChange={handleStorageChange}
-              />
-              <label htmlFor="mysql">MySQL Database</label>
-            </div>
-            
-            <div className="storage-option">
-              <input
-                type="radio"
-                id="redis"
-                name="storage"
-                value="redis"
-                checked={formData.storage === 'redis'}
-                onChange={handleStorageChange}
-              />
-              <label htmlFor="redis">Redis Cluster</label>
-            </div>
-          </div>
+          <label htmlFor="address">Address:</label>
+          <textarea
+            id="address"
+            name="address"
+            className="form-control"
+            value={user.address}
+            onChange={handleChange}
+            rows="3"
+          ></textarea>
         </div>
         
-        <button type="submit" className="submit-btn" disabled={loading}>
-          {loading ? 'Adding...' : 'Add User'}
-        </button>
+        <div className="form-group" style={{ display: 'flex', gap: '10px' }}>
+          <button type="submit" className="btn btn-primary" disabled={loading}>
+            {loading ? 'Saving...' : (isEditing ? 'Update User' : 'Add User')}
+          </button>
+          <button 
+            type="button" 
+            className="btn btn-secondary"
+            onClick={() => navigate(isEditing ? `/${storage}` : '/')}
+          >
+            Cancel
+          </button>
+        </div>
       </form>
     </div>
   );

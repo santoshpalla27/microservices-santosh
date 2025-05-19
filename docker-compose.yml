@@ -1,53 +1,65 @@
 version: '3.8'
 
 services:
+  # Frontend React Application
   frontend:
     build: ./frontend
+    container_name: user-app-frontend
     ports:
       - "3000:3000"
     depends_on:
       - backend
-    environment:
-      - REACT_APP_API_URL=http://localhost:5000/api  # Change IP if needed
     networks:
-      - app_net
+      - app-network
+    environment:
+      - REACT_APP_API_URL=http://localhost:5000
+      - WDS_SOCKET_PORT=0
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
 
+  # Backend Node.js Application
   backend:
     build: ./backend
+    container_name: user-app-backend
     ports:
       - "5000:5000"
     depends_on:
       - mysql
-      - redis-node-0
-      - redis-node-1
-      - redis-node-2
-      - redis-node-3
-      - redis-node-4
-      - redis-node-5
     environment:
-      - DB_HOST=mysql
-      - DB_USER=root
-      - DB_PASSWORD=password
-      - DB_NAME=userdb
+      - NODE_ENV=development
+      - PORT=5000
+      - MYSQL_HOST=mysql
+      - MYSQL_USER=user
+      - MYSQL_PASSWORD=password
+      - MYSQL_DATABASE=userdb
       - REDIS_NODES=redis-node-0:6379,redis-node-1:6379,redis-node-2:6379,redis-node-3:6379,redis-node-4:6379,redis-node-5:6379
       - REDIS_PASSWORD=bitnami123
-      - PORT=5000
     networks:
-      - app_net
+      - app-network
+      - redis-cluster
+    volumes:
+      - ./backend:/usr/src/app
+      - /usr/src/app/node_modules
 
+  # MySQL Database
   mysql:
     image: mysql:8.0
+    container_name: user-app-mysql
+    environment:
+      - MYSQL_ROOT_PASSWORD=rootpassword
+      - MYSQL_DATABASE=userdb
+      - MYSQL_USER=user
+      - MYSQL_PASSWORD=password
     ports:
       - "3306:3306"
-    environment:
-      - MYSQL_ROOT_PASSWORD=password
-      - MYSQL_DATABASE=userdb
     volumes:
-      - mysql_data:/var/lib/mysql
-      - ./init/init.sql:/docker-entrypoint-initdb.d/init.sql
+      - mysql-data:/var/lib/mysql
+      - ./backend/init.sql:/docker-entrypoint-initdb.d/init.sql
     networks:
-      - app_net
+      - app-network
 
+  # Redis Cluster Nodes
   redis-node-0:
     image: bitnami/redis-cluster:latest
     container_name: redis-node-0
@@ -59,7 +71,7 @@ services:
     volumes:
       - redis-data-0:/bitnami
     networks:
-      - app_net
+      - redis-cluster
     ports:
       - "7000:6379"
 
@@ -74,7 +86,7 @@ services:
     volumes:
       - redis-data-1:/bitnami
     networks:
-      - app_net
+      - redis-cluster
     ports:
       - "7001:6379"
 
@@ -89,7 +101,7 @@ services:
     volumes:
       - redis-data-2:/bitnami
     networks:
-      - app_net
+      - redis-cluster
     ports:
       - "7002:6379"
 
@@ -104,7 +116,7 @@ services:
     volumes:
       - redis-data-3:/bitnami
     networks:
-      - app_net
+      - redis-cluster
     ports:
       - "7003:6379"
 
@@ -119,7 +131,7 @@ services:
     volumes:
       - redis-data-4:/bitnami
     networks:
-      - app_net
+      - redis-cluster
     ports:
       - "7004:6379"
 
@@ -134,7 +146,7 @@ services:
     volumes:
       - redis-data-5:/bitnami
     networks:
-      - app_net
+      - redis-cluster
     ports:
       - "7005:6379"
 
@@ -148,7 +160,7 @@ services:
       - redis-node-4
       - redis-node-5
     networks:
-      - app_net
+      - redis-cluster
     restart: "no"
     command: >
       bash -c '
@@ -172,11 +184,13 @@ services:
       '
 
 networks:
-  app_net:
+  app-network:
+    driver: bridge
+  redis-cluster:
     driver: bridge
 
 volumes:
-  mysql_data:
+  mysql-data:
   redis-data-0:
   redis-data-1:
   redis-data-2:

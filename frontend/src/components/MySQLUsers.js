@@ -1,104 +1,133 @@
 import React, { useState, useEffect } from 'react';
-import { toast } from 'react-toastify';
-import api from '../services/api';
+import { Link } from 'react-router-dom';
+import { fetchMySQLUsers, deleteMySQLUser } from '../services/apiService';
 
-const MySQLUsers = ({ refreshTrigger, onDelete }) => {
+const MySQLUsers = () => {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  
-  // Fetch users from MySQL database
-  const fetchUsers = async () => {
-    try {
-      setLoading(true);
-      const data = await api.getMySQLUsers();
-      setUsers(data);
-      setError(null);
-    } catch (err) {
-      console.error('Error fetching MySQL users:', err);
-      setError('Failed to fetch users from MySQL database');
-      toast.error('Failed to load MySQL users');
-    } finally {
-      setLoading(false);
-    }
-  };
-  
-  // Delete a user
-  const handleDelete = async (id) => {
-    if (!window.confirm('Are you sure you want to delete this user?')) {
-      return;
-    }
-    
-    try {
-      await api.deleteMySQLUser(id);
-      toast.success('User deleted successfully');
-      
-      // Trigger refresh in parent component
-      if (onDelete) onDelete();
-      
-      // Or refresh locally
-      fetchUsers();
-    } catch (err) {
-      console.error('Error deleting user:', err);
-      toast.error('Failed to delete user');
-    }
-  };
-  
-  // Fetch users on component mount and when refreshTrigger changes
+  const [searchTerm, setSearchTerm] = useState('');
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const [message, setMessage] = useState(null);
+
   useEffect(() => {
+    const fetchUsers = async () => {
+      try {
+        setLoading(true);
+        const response = await fetchMySQLUsers();
+        setUsers(response.data);
+        setError(null);
+      } catch (error) {
+        console.error('Error fetching users from MySQL:', error);
+        setError('Failed to load users from MySQL database');
+      } finally {
+        setLoading(false);
+      }
+    };
+
     fetchUsers();
   }, [refreshTrigger]);
-  
-  // Refresh button handler
-  const handleRefresh = () => {
-    fetchUsers();
+
+  const handleDelete = async (id) => {
+    if (window.confirm('Are you sure you want to delete this user?')) {
+      try {
+        await deleteMySQLUser(id);
+        setMessage({ type: 'success', text: 'User deleted successfully' });
+        // Refresh the user list
+        setRefreshTrigger(prev => prev + 1);
+        
+        // Clear message after 3 seconds
+        setTimeout(() => {
+          setMessage(null);
+        }, 3000);
+      } catch (error) {
+        console.error('Error deleting user:', error);
+        setMessage({ type: 'error', text: 'Failed to delete user' });
+      }
+    }
   };
-  
-  if (loading) {
-    return <div className="loading">Loading MySQL users...</div>;
-  }
-  
-  if (error) {
+
+  const filteredUsers = users.filter(user => {
+    const searchLower = searchTerm.toLowerCase();
     return (
-      <div>
-        <p>{error}</p>
-        <button className="refresh-btn" onClick={handleRefresh}>Retry</button>
-      </div>
+      user.name.toLowerCase().includes(searchLower) ||
+      user.email.toLowerCase().includes(searchLower) ||
+      (user.phone && user.phone.toLowerCase().includes(searchLower)) ||
+      (user.address && user.address.toLowerCase().includes(searchLower))
     );
-  }
-  
+  });
+
   return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <h2>MySQL Database Users</h2>
-        <button className="refresh-btn" onClick={handleRefresh}>Refresh</button>
+    <div className="mysql-users">
+      <h2>MySQL Database Records</h2>
+      
+      {message && (
+        <div className={`alert ${message.type === 'success' ? 'alert-success' : 'alert-danger'}`}>
+          {message.text}
+        </div>
+      )}
+      
+      <div className="actions-bar">
+        <Link to="/add" className="btn btn-primary">Add New User</Link>
+        
+        <div className="search-bar">
+          <input
+            type="text"
+            placeholder="Search users..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
+          {searchTerm && (
+            <button 
+              className="btn btn-secondary"
+              onClick={() => setSearchTerm('')}
+            >
+              Clear
+            </button>
+          )}
+        </div>
       </div>
       
-      {users.length === 0 ? (
-        <p className="empty-message">No users found in MySQL database</p>
+      {loading ? (
+        <div className="loading">Loading users from MySQL...</div>
+      ) : error ? (
+        <div className="alert alert-danger">{error}</div>
+      ) : filteredUsers.length === 0 ? (
+        <div className="empty-message">
+          {searchTerm 
+            ? 'No users found matching your search criteria' 
+            : 'No users found in MySQL database. Add some users to get started!'}
+        </div>
       ) : (
-        <table className="users-table">
+        <table className="user-list">
           <thead>
             <tr>
               <th>ID</th>
               <th>Name</th>
               <th>Email</th>
               <th>Phone</th>
-              <th>Created At</th>
+              <th>Address</th>
               <th>Actions</th>
             </tr>
           </thead>
           <tbody>
-            {users.map((user) => (
+            {filteredUsers.map(user => (
               <tr key={user.id}>
                 <td>{user.id}</td>
                 <td>{user.name}</td>
                 <td>{user.email}</td>
                 <td>{user.phone || '-'}</td>
-                <td>{new Date(user.created_at).toLocaleString()}</td>
+                <td>{user.address || '-'}</td>
                 <td>
+                  <Link 
+                    to={`/edit/mysql/${user.id}`} 
+                    className="btn btn-secondary"
+                    style={{ marginRight: '5px' }}
+                  >
+                    Edit
+                  </Link>
                   <button 
-                    className="delete-btn" 
+                    className="btn btn-danger"
                     onClick={() => handleDelete(user.id)}
                   >
                     Delete
